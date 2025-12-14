@@ -5,6 +5,7 @@ import WelcomeScreen from '@/components/screens/WelcomeScreen';
 import MainMenuScreen from '@/components/screens/MainMenuScreen';
 import CreateRoomForm from '@/components/screens/CreateRoomForm';
 import GameWaitingRoom from '@/components/screens/GameWaitingRoom';
+import ActiveGameScreen from '@/components/screens/ActiveGameScreen';
 
 interface GameSettings {
   roomName: string;
@@ -57,6 +58,14 @@ export default function WavelengthGamePage() {
     console.log('Psychic assigned randomly');
   };
 
+  const handleLockInGuess = (position: number) => {
+    console.log(`${playerName} locked in guess at ${position}%`);
+  };
+
+  const handleBackToLobby = () => {
+    setCurrentScreen('lobby');
+  };
+
   const renderCurrentScreen = () => {
     switch (currentScreen) {
       case 'welcome':
@@ -100,23 +109,19 @@ export default function WavelengthGamePage() {
           </div>
         );
       case 'game':
-        return (
-          <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-            <div className="text-white text-center">
-              <h1 className="text-4xl font-bold text-fuchsia-500 mb-4">GAME INITIALIZED</h1>
-              <p className="text-teal-400 text-xl mb-4">Welcome, Front Man {playerName}!</p>
-              {gameSettings && (
-                <div className="text-zinc-300 space-y-2">
-                  <p>Room: <span className="text-white font-bold">{gameSettings.roomName}</span></p>
-                  <p>Lives: <span className="text-white font-bold">{gameSettings.numberOfLives}</span></p>
-                  <p>Rounds: <span className="text-white font-bold">{gameSettings.numberOfRounds}</span></p>
-                  <p>Max Points: <span className="text-white font-bold">{gameSettings.maxPoints}</span></p>
-                </div>
-              )}
-              <p className="text-gray-500 mt-6">Game lobby coming next...</p>
-            </div>
-          </div>
-        );
+        return gameSettings ? (
+          <ActiveGameScreen
+            roomName={gameSettings.roomName}
+            round={1}
+            maxRounds={gameSettings.numberOfRounds}
+            score={0}
+            lives={gameSettings.numberOfLives}
+            maxLives={gameSettings.numberOfLives}
+            playerName={playerName}
+            onLockInGuess={handleLockInGuess}
+            onBack={handleBackToLobby}
+          />
+        ) : null;
       default:
         return <WelcomeScreen onNext={handlePlayerNameSubmit} />;
     }
