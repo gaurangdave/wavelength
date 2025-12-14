@@ -9,12 +9,18 @@ interface Message {
   created_at: string;
   messageId?: string;
   isP2P?: boolean;
+  userName?: string;
+  messageText?: string;
+  sentTimestamp?: string;
+  receivedTimestamp?: string;
+  deliveryTime?: number;
 }
 
 export default function HelloWebRTCPage() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [roomName, setRoomName] = useState('');
+  const [joinUserName, setJoinUserName] = useState('');
   const [userName, setUserName] = useState('');
   const [createRoomName, setCreateRoomName] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -54,11 +60,21 @@ export default function HelloWebRTCPage() {
     });
 
     manager.onPeerMessage((message: WebRTCMessage) => {
+      const receivedTimestamp = new Date().toISOString();
+      const sentTime = new Date(message.timestamp);
+      const receivedTime = new Date(receivedTimestamp);
+      const deliveryTime = receivedTime.getTime() - sentTime.getTime();
+      
       const newMsg: Message = {
         content: `${message.userName}: ${message.content}`,
-        created_at: message.timestamp,
+        created_at: receivedTimestamp,
         messageId: message.messageId,
         isP2P: true,
+        userName: message.userName,
+        messageText: message.content,
+        sentTimestamp: message.timestamp,
+        receivedTimestamp,
+        deliveryTime,
       };
       setMessages((prev) => [...prev, newMsg]);
       scrollToBottom();
@@ -69,22 +85,22 @@ export default function HelloWebRTCPage() {
   };
 
   const handleJoinRoom = async () => {
-    if (!roomName.trim()) return;
+    if (!roomName.trim() || !joinUserName.trim()) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const userNameForRoom = `User-${Date.now()}`;
-      const manager = initializeWebRTC(userNameForRoom);
+      const manager = initializeWebRTC(joinUserName.trim());
 
       const { roomId, participants: roomParticipants } = await manager.joinRoom(roomName);
       setCurrentRoom(roomId);
       setCurrentRoomName(roomName);
-      setCurrentUserName(userNameForRoom);
+      setCurrentUserName(joinUserName.trim());
       setParticipants(roomParticipants);
       setShowJoinModal(false);
       setRoomName('');
+      setJoinUserName('');
       
       // Load existing messages
       await loadMessages(roomId);
@@ -133,10 +149,21 @@ export default function HelloWebRTCPage() {
       const response = await fetch(`/api/messages?roomId=${roomId}`);
       if (response.ok) {
         const { messages } = await response.json();
-        const dbMessages = (messages || []).map((msg: any) => ({
-          ...msg,
-          isP2P: false,
-        }));
+        const dbMessages = (messages || []).map((msg: any) => {
+          // Parse message content to extract username and message text
+          const parts = msg.content.split(': ');
+          const userName = parts.length > 1 ? parts[0] : 'Unknown';
+          const messageText = parts.length > 1 ? parts.slice(1).join(': ') : msg.content;
+          
+          return {
+            ...msg,
+            isP2P: false,
+            userName,
+            messageText,
+            receivedTimestamp: new Date().toISOString(),
+            deliveryTime: 0, // Database messages don't have meaningful delivery time
+          };
+        });
         setMessages(dbMessages);
         setLastMessageCheck(new Date());
         scrollToBottom();
@@ -164,10 +191,21 @@ export default function HelloWebRTCPage() {
       if (response.ok) {
         const { messages } = await response.json();
         if (messages && messages.length > 0) {
-          const newDbMessages = messages.map((msg: any) => ({
-            ...msg,
-            isP2P: false,
-          }));
+          const newDbMessages = messages.map((msg: any) => {
+            // Parse message content to extract username and message text
+            const parts = msg.content.split(': ');
+            const userName = parts.length > 1 ? parts[0] : 'Unknown';
+            const messageText = parts.length > 1 ? parts.slice(1).join(': ') : msg.content;
+            
+            return {
+              ...msg,
+              isP2P: false,
+              userName,
+              messageText,
+              receivedTimestamp: new Date().toISOString(),
+              deliveryTime: 0,
+            };
+          });
           
           setMessages((prev) => {
             // Filter out duplicates based on content and timestamp
@@ -196,6 +234,7 @@ export default function HelloWebRTCPage() {
 
     setIsSendingMessage(true);
     const messageContent = newMessage.trim();
+    const sentTimestamp = new Date().toISOString();
     setNewMessage(''); // Clear input immediately for better UX
     
     try {
@@ -208,9 +247,14 @@ export default function HelloWebRTCPage() {
           // Add message to local state immediately
           const p2pMessage: Message = {
             content: `${currentUserName}: ${messageContent}`,
-            created_at: new Date().toISOString(),
+            created_at: sentTimestamp,
             messageId: `local-${Date.now()}`,
             isP2P: true,
+            userName: currentUserName,
+            messageText: messageContent,
+            sentTimestamp,
+            receivedTimestamp: sentTimestamp,
+            deliveryTime: 0, // Self-sent message
           };
           setMessages((prev) => [...prev, p2pMessage]);
           scrollToBottom();
@@ -329,21 +373,38 @@ export default function HelloWebRTCPage() {
               
               {/* Messages List */}
               <div className="h-96 overflow-y-auto p-4 space-y-3">
-                {messages.map((message, index) => (
-                  <div key={message.id || message.messageId || index} className="flex flex-col">
-                    <div className={`rounded-lg p-3 ${message.isP2P ? 'bg-blue-50 border border-blue-200' : 'bg-gray-100'}`}>
-                      <p className="text-gray-800">{message.content}</p>
-                      <div className="flex justify-between items-center mt-1">
-                        <p className="text-xs text-gray-500">
-                          {new Date(message.created_at).toLocaleTimeString()}
-                        </p>
-                        {message.isP2P && (
-                          <span className="text-xs text-blue-600 font-medium">P2P</span>
+                {messages.map((message, index) => {
+                  const isOwnMessage = message.userName === currentUserName;
+                  return (
+                    <div key={message.id || message.messageId || index} className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-xs lg:max-w-md rounded-lg p-3 ${message.isP2P ? (isOwnMessage ? 'bg-blue-500 text-white' : 'bg-blue-50 border border-blue-200') : (isOwnMessage ? 'bg-gray-700 text-white' : 'bg-gray-100')}`}>
+                        {!isOwnMessage && (
+                          <p className={`text-xs font-medium mb-1 ${message.isP2P ? 'text-blue-700' : 'text-gray-600'}`}>
+                            {message.userName || 'Unknown'}
+                          </p>
                         )}
+                        <p className={isOwnMessage ? 'text-white' : 'text-gray-800'}>
+                          {message.messageText || message.content.split(': ').slice(1).join(': ') || message.content}
+                        </p>
+                        <div className={`flex justify-between items-center mt-2 text-xs ${isOwnMessage ? 'text-gray-200' : 'text-gray-500'}`}>
+                          <span>
+                            {new Date(message.created_at).toLocaleTimeString()}
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            {message.isP2P && (
+                              <span className={`font-medium ${isOwnMessage ? 'text-blue-200' : 'text-blue-600'}`}>P2P</span>
+                            )}
+                            {message.deliveryTime !== undefined && message.deliveryTime > 0 && (
+                              <span className={`text-xs ${isOwnMessage ? 'text-gray-300' : 'text-gray-400'}`}>
+                                {message.deliveryTime}ms
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {messages.length === 0 && (
                   <div className="text-center text-gray-500 py-8">
                     <p>No messages yet. Start the conversation!</p>
@@ -466,19 +527,42 @@ export default function HelloWebRTCPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm mx-4">
             <h2 className="text-xl font-semibold mb-4 text-gray-800">Join a Room</h2>
-            <input
-              type="text"
-              placeholder="Enter room name"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onKeyDown={(e) => e.key === 'Enter' && handleJoinRoom()}
-              disabled={isLoading}
-            />
-            <div className="flex space-x-3">
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter your name"
+                  value={joinUserName}
+                  onChange={(e) => setJoinUserName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Room Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter room name"
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoinRoom()}
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+            
+            <div className="flex space-x-3 mt-6">
               <button
                 onClick={handleJoinRoom}
-                disabled={isLoading || !roomName.trim()}
+                disabled={isLoading || !roomName.trim() || !joinUserName.trim()}
                 className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-semibold py-2 px-4 rounded-lg transition duration-300"
               >
                 {isLoading ? 'Joining...' : 'Join'}
@@ -487,6 +571,7 @@ export default function HelloWebRTCPage() {
                 onClick={() => {
                   setShowJoinModal(false);
                   setRoomName('');
+                  setJoinUserName('');
                 }}
                 disabled={isLoading}
                 className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white font-semibold py-2 px-4 rounded-lg transition duration-300"
