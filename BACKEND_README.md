@@ -68,7 +68,7 @@ You can verify the tables were created by visiting:
 
 The app uses default local Supabase credentials (already configured in `lib/supabase.ts`):
 - URL: `http://localhost:54321`
-- Anon Key: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (default local key)
+- Anon Key: `eyJhb...` (default local key)
 
 ### 5. Start the Development Server
 
