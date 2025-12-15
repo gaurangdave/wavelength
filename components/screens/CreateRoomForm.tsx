@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { createGame, generateRoomCode, generatePeerId } from '@/lib/api-client';
 
 interface CreateRoomFormProps {
   playerName: string;
-  onCreateGame?: (gameSettings: GameSettings) => void;
+  onCreateGame?: (gameData: { roomId: string; roomCode: string; playerId: string; peerId: string; gameSettings: GameSettings }) => void;
   onBack?: () => void;
 }
 
@@ -48,10 +49,44 @@ export default function CreateRoomForm({ playerName, onCreateGame, onBack }: Cre
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (gameSettings.roomName.trim()) {
-      onCreateGame?.(gameSettings);
+    if (gameSettings.roomName.trim() && !isCreating) {
+      setIsCreating(true);
+      setError(null);
+      
+      try {
+        const roomCode = generateRoomCode();
+        const peerId = generatePeerId();
+        
+        const result = await createGame({
+          roomName: gameSettings.roomName,
+          roomCode,
+          playerName,
+          peerId,
+          settings: {
+            numberOfLives: gameSettings.numberOfLives,
+            numberOfRounds: gameSettings.numberOfRounds,
+            maxPoints: gameSettings.maxPoints
+          }
+        });
+        
+        onCreateGame?.({
+          roomId: result.room.id,
+          roomCode: result.room.room_code,
+          playerId: result.player.id,
+          peerId: result.player.peer_id,
+          gameSettings
+        });
+      } catch (err) {
+        console.error('Failed to create game:', err);
+        setError('Failed to create game. Please try again.');
+      } finally {
+        setIsCreating(false);
+      }
     }
   };
 
@@ -203,21 +238,28 @@ export default function CreateRoomForm({ playerName, onCreateGame, onBack }: Cre
               </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-900/50 border-2 border-red-600 px-4 py-3 text-red-300 text-center font-medium tracking-wide">
+                {error}
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="space-y-4 pt-6">
               <button
                 type="submit"
-                disabled={!isFormValid}
+                disabled={!isFormValid || isCreating}
                 className={`
                   w-full py-4 px-8 text-xl font-bold text-white uppercase tracking-widest
                   transition-all duration-300 border-2 border-fuchsia-600
-                  ${isFormValid
+                  ${isFormValid && !isCreating
                     ? 'bg-fuchsia-600 hover:bg-fuchsia-700 hover:shadow-[0_0_30px_rgba(236,72,153,0.5)] cursor-pointer'
                     : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
                   }
                 `}
               >
-                INITIALIZE GAME
+                {isCreating ? 'CREATING...' : 'INITIALIZE GAME'}
               </button>
               
               {onBack && (

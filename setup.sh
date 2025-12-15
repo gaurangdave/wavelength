@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Setting up HelloSupa..."
+echo "🎮 Setting up Wavelength Game Backend..."
 
 # Check if Supabase CLI is installed
 if ! command -v supabase &> /dev/null; then
@@ -20,8 +20,24 @@ supabase start
 echo "📊 Running database migrations..."
 supabase db reset
 
-echo "✅ Setup complete!"
-echo "🌐 Your Supabase is running at: http://localhost:54321"
-echo "🎉 Visit http://localhost:3000/hellosupa to see your app!"
 echo ""
-echo "To stop Supabase, run: supabase stop"
+echo "✅ Setup complete!"
+echo ""
+echo "🔗 Supabase Services:"
+echo "   API URL: http://localhost:54321"
+echo "   Studio URL: http://localhost:54323"
+echo ""
+echo "📚 Database Tables Created:"
+echo "   ✓ game_rooms - Game room management"
+echo "   ✓ players - Player information"
+echo "   ✓ game_state - Current game state tracking"
+echo "   ✓ rounds - Round data and concepts"
+echo "   ✓ dial_updates - Real-time dial positions"
+echo "   ✓ signaling - WebRTC peer connections"
+echo ""
+echo "🎯 Next Steps:"
+echo "   1. Run: npm run dev"
+echo "   2. Visit: http://localhost:3000/wavelength"
+echo "   3. Check BACKEND_README.md for API documentation"
+echo ""
+echo "🛑 To stop Supabase: supabase stop"

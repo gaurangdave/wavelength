@@ -3,11 +3,11 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
-    const { roomId, fromPeerId, toPeerId, type, payload } = await request.json();
+    const { room_id, from_peer_id, to_peer_id, type, payload } = await request.json();
 
-    if (!roomId || !fromPeerId || !type || !payload) {
+    if (!room_id || !from_peer_id || !type) {
       return NextResponse.json(
-        { error: 'Room ID, from peer ID, type, and payload are required' },
+        { error: 'room_id, from_peer_id, and type are required' },
         { status: 400 }
       );
     }
@@ -16,11 +16,12 @@ export async function POST(request: Request) {
     const { data: signal, error } = await supabase
       .from('signaling')
       .insert([{
-        room_id: roomId,
-        from_peer_id: fromPeerId,
-        to_peer_id: toPeerId,
+        room_id,
+        from_peer_id,
+        to_peer_id,
         type,
-        payload
+        payload,
+        is_consumed: false
       }])
       .select()
       .single();
@@ -33,9 +34,43 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ signal });
+    return NextResponse.json({ success: true, signal });
   } catch (error) {
     console.error('Error in POST /api/signaling:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const { messageId } = await request.json();
+
+    if (!messageId) {
+      return NextResponse.json(
+        { error: 'messageId is required' },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase
+      .from('signaling')
+      .update({ is_consumed: true })
+      .eq('id', messageId);
+
+    if (error) {
+      console.error('Error updating signaling message:', error);
+      return NextResponse.json(
+        { error: 'Failed to update signaling message' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error in PATCH /api/signaling:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

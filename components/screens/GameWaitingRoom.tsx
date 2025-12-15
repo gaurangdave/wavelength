@@ -1,59 +1,152 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useWavelengthP2P } from '@/lib/hooks/useWavelengthP2P';
+import { getPlayers, assignRandomPsychic, startGame } from '@/lib/api-client';
 
 interface Player {
   id: string;
   name: string;
   isHost: boolean;
   isYou: boolean;
+  isConnected: boolean;
+  isPsychic: boolean;
 }
 
 interface GameWaitingRoomProps {
+  roomId: string;
   roomName: string;
   roomCode: string;
   playerName: string;
+  playerId: string;
+  peerId: string;
   isHost?: boolean;
-  onStartGame?: () => void;
-  onAssignPsychic?: () => void;
+  onStartGame?: (roundData: any) => void;
   onBack?: () => void;
 }
 
 export default function GameWaitingRoom({ 
+  roomId,
   roomName, 
   roomCode, 
   playerName, 
+  playerId,
+  peerId,
   isHost = true,
   onStartGame,
-  onAssignPsychic,
   onBack 
 }: GameWaitingRoomProps) {
-  const [players, setPlayers] = useState<Player[]>([
-    { id: '1', name: 'Player 001', isHost: false, isYou: false },
-    { id: '2', name: 'Player 218', isHost: false, isYou: false },
-    { id: '3', name: playerName, isHost: isHost, isYou: true },
-    { id: '4', name: 'Player 456', isHost: false, isYou: false },
-    { id: '5', name: 'Player 067', isHost: false, isYou: false },
-  ]);
-
+  const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPsychic, setSelectedPsychic] = useState<string | null>(null);
   const [isGameReady, setIsGameReady] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
-  // Simulate minimum players requirement
+  // Initialize P2P connection
+  const p2p = useWavelengthP2P({
+    peerId,
+    onGameStateSync: async (round, score, lives, psychicId) => {
+      console.log('Game state synced from host:', { round, score, lives, psychicId });
+      
+      // Non-host players: fetch round data and start game
+      if (!isHost && round === 1) {
+        try {
+          // Fetch the round data from the API
+          const response = await fetch(`/api/game/state?roomId=${roomId}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.currentRound) {
+              onStartGame?.({
+                round: data.currentRound,
+                gameState: {
+                  current_round: round,
+                  team_score: score,
+                  lives_remaining: lives,
+                  current_psychic_id: psychicId
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch round data:', err);
+        }
+      }
+    }
+  });
+
+  // Join P2P room
   useEffect(() => {
-    setIsGameReady(players.length >= 4);
-  }, [players.length]);
+    p2p.joinRoom(roomId);
+    return () => p2p.leaveRoom();
+  }, [roomId]);
 
-  const handleAssignPsychic = () => {
-    const eligiblePlayers = players.filter(p => !p.isHost);
-    const randomPlayer = eligiblePlayers[Math.floor(Math.random() * eligiblePlayers.length)];
-    setSelectedPsychic(randomPlayer.id);
-    onAssignPsychic?.();
+  // Fetch players from database
+  useEffect(() => {
+    const fetchPlayers = async () => {
+      try {
+        const fetchedPlayers = await getPlayers(roomId);
+        setPlayers(fetchedPlayers.map(p => ({
+          id: p.id,
+          name: p.player_name,
+          isHost: p.is_host,
+          isYou: p.id === playerId,
+          isConnected: p.is_connected,
+          isPsychic: p.is_psychic
+        })));
+        
+        // Check if psychic is already assigned
+        const psychic = fetchedPlayers.find(p => p.is_psychic);
+        if (psychic) {
+          setSelectedPsychic(psychic.id);
+        }
+      } catch (err) {
+        console.error('Failed to fetch players:', err);
+      }
+    };
+
+    fetchPlayers();
+    // Poll for updates every 2 seconds
+    const interval = setInterval(fetchPlayers, 2000);
+    return () => clearInterval(interval);
+  }, [roomId, playerId]);
+
+  // Check if game is ready
+  useEffect(() => {
+    setIsGameReady(players.length >= 2 && selectedPsychic !== null);
+  }, [players.length, selectedPsychic]);
+
+  const handleAssignPsychic = async () => {
+    try {
+      const result = await assignRandomPsychic(roomId);
+      setSelectedPsychic(result.psychicId);
+      // Update local players list
+      setPlayers(prev => prev.map(p => ({
+        ...p,
+        isPsychic: p.id === result.psychicId
+      })));
+    } catch (err) {
+      console.error('Failed to assign psychic:', err);
+    }
   };
 
-  const handleStartGame = () => {
-    if (isGameReady && selectedPsychic) {
-      onStartGame?.();
+  const handleStartGame = async () => {
+    if (isGameReady && selectedPsychic && !isStarting) {
+      setIsStarting(true);
+      try {
+        const result = await startGame(roomId);
+        
+        // Broadcast game start via P2P
+        p2p.sendGameStateSync(
+          result.round.round_number,
+          result.gameState.team_score,
+          result.gameState.lives_remaining,
+          result.gameState.current_psychic_id
+        );
+        
+        onStartGame?.(result);
+      } catch (err) {
+        console.error('Failed to start game:', err);
+        setIsStarting(false);
+      }
     }
   };
 
@@ -106,7 +199,7 @@ export default function GameWaitingRoom({
                   bg-zinc-900 border-2 p-4 transition-all duration-300
                   ${player.isYou 
                     ? 'border-fuchsia-500 shadow-[0_0_15px_rgba(236,72,153,0.3)]' 
-                    : selectedPsychic === player.id
+                    : player.isPsychic
                     ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
                     : 'border-teal-600 hover:border-teal-500'
                   }
@@ -118,12 +211,12 @@ export default function GameWaitingRoom({
                     w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
                     ${player.isYou 
                       ? 'bg-fuchsia-600 text-white' 
-                      : selectedPsychic === player.id
+                      : player.isPsychic
                       ? 'bg-yellow-500 text-black'
                       : 'bg-teal-600 text-white'
                     }
                   `}>
-                    {player.isHost ? 'H' : selectedPsychic === player.id ? 'P' : 'U'}
+                    {player.isHost ? 'H' : player.isPsychic ? 'P' : 'U'}
                   </div>
                   
                   {/* Player Info */}
@@ -136,19 +229,19 @@ export default function GameWaitingRoom({
                       {player.isYou && ' (YOU)'}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wide">
-                      {player.isHost ? 'Front Man' : selectedPsychic === player.id ? 'Psychic' : 'Player'}
+                      {player.isHost ? 'Front Man' : player.isPsychic ? 'Psychic' : 'Player'}
                     </div>
                   </div>
 
                   {/* Status Indicator */}
-                  <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
+                  <div className={`w-2 h-2 rounded-full ${player.isConnected ? 'bg-teal-400 animate-pulse' : 'bg-zinc-600'}`}></div>
                 </div>
               </div>
             ))}
           </div>
 
           <div className="text-center mt-6 text-gray-500 text-sm font-medium tracking-wide uppercase">
-            {players.length} / 8 Players Connected
+            {players.length} Players Connected | {p2p.connectedPeers.length} P2P Connections
           </div>
         </div>
 
@@ -182,18 +275,20 @@ export default function GameWaitingRoom({
           {/* Start Game Button */}
           <button
             onClick={handleStartGame}
-            disabled={!isGameReady || !selectedPsychic}
+            disabled={!isGameReady || isStarting}
             className={`
               w-full py-6 px-8 text-2xl font-bold uppercase tracking-widest
               transition-all duration-300 border-2
-              ${(isGameReady && selectedPsychic)
+              ${(isGameReady && !isStarting)
                 ? 'bg-fuchsia-600 border-fuchsia-600 text-white hover:bg-fuchsia-700 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer'
                 : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed opacity-50'
               }
             `}
           >
-            {!isGameReady 
-              ? `WAITING FOR PLAYERS (${players.length}/4)` 
+            {isStarting 
+              ? 'STARTING...'
+              : !isGameReady 
+              ? `WAITING FOR PLAYERS (${players.length}/2)` 
               : !selectedPsychic 
               ? 'ASSIGN PSYCHIC FIRST'
               : 'START GAME'
@@ -216,11 +311,11 @@ export default function GameWaitingRoom({
           {isGameReady && selectedPsychic ? (
             <div className="flex items-center justify-center space-x-2 text-teal-400 text-sm font-medium tracking-wide uppercase">
               <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
-              <span>READY TO COMMENCE</span>
+              <span>READY TO COMMENCE | P2P: {p2p.connectionState}</span>
             </div>
           ) : (
             <div className="text-gray-500 text-sm font-medium tracking-wide uppercase">
-              {!selectedPsychic ? 'Assign a Psychic to continue' : 'Waiting for minimum players...'}
+              {!selectedPsychic ? 'Assign a Psychic to continue' : `Need at least 2 players (${players.length}/2)`}
             </div>
           )}
         </div>

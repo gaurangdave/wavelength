@@ -4,6 +4,7 @@ import { useState } from 'react';
 import WelcomeScreen from '@/components/screens/WelcomeScreen';
 import MainMenuScreen from '@/components/screens/MainMenuScreen';
 import CreateRoomForm from '@/components/screens/CreateRoomForm';
+import JoinRoomForm from '@/components/screens/JoinRoomForm';
 import GameWaitingRoom from '@/components/screens/GameWaitingRoom';
 import ActiveGameScreen from '@/components/screens/ActiveGameScreen';
 
@@ -14,11 +15,37 @@ interface GameSettings {
   maxPoints: number;
 }
 
+interface GameData {
+  roomId: string;
+  roomCode: string;
+  playerId: string;
+  peerId: string;
+  gameSettings: GameSettings;
+}
+
+interface RoundData {
+  round: {
+    id: string;
+    round_number: number;
+    left_concept: string;
+    right_concept: string;
+    psychic_hint: string;
+    target_position: number;
+  };
+  gameState: {
+    current_round: number;
+    team_score: number;
+    lives_remaining: number;
+    current_psychic_id: string;
+  };
+}
+
 export default function WavelengthGamePage() {
   const [currentScreen, setCurrentScreen] = useState<'welcome' | 'main-menu' | 'create-room' | 'join-room' | 'lobby' | 'game'>('welcome');
   const [playerName, setPlayerName] = useState<string>('');
-  const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
-  const [roomCode, setRoomCode] = useState<string>('');
+  const [gameData, setGameData] = useState<GameData | null>(null);
+  const [roundData, setRoundData] = useState<RoundData | null>(null);
+  const [isHost, setIsHost] = useState<boolean>(false);
 
   const handlePlayerNameSubmit = (name: string) => {
     setPlayerName(name);
@@ -36,26 +63,31 @@ export default function WavelengthGamePage() {
     console.log(`${playerName} chose to join a room`);
   };
 
-  const handleCreateGame = (settings: GameSettings) => {
-    setGameSettings(settings);
-    // Generate a random room code
-    const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-    setRoomCode(code);
+  const handleCreateGame = (data: GameData) => {
+    setGameData(data);
+    setIsHost(true);
     setCurrentScreen('lobby');
-    console.log(`${playerName} created game "${settings.roomName}" with code ${code}:`, settings);
+    console.log(`${playerName} created game "${data.gameSettings.roomName}" with code ${data.roomCode}:`, data);
+  };
+
+  const handleJoinGame = (data: GameData) => {
+    setGameData(data);
+    setIsHost(false);
+    setCurrentScreen('lobby');
+    console.log(`${playerName} joined game with code ${data.roomCode}:`, data);
   };
 
   const handleBackToMenu = () => {
     setCurrentScreen('main-menu');
+    setGameData(null);
+    setRoundData(null);
+    setIsHost(false);
   };
 
-  const handleStartGame = () => {
+  const handleStartGame = (data: RoundData) => {
+    setRoundData(data);
     setCurrentScreen('game');
-    console.log(`Game started by ${playerName}`);
-  };
-
-  const handleAssignPsychic = () => {
-    console.log('Psychic assigned randomly');
+    console.log(`Game started by ${playerName}`, data);
   };
 
   const handleLockInGuess = (position: number) => {
@@ -87,37 +119,44 @@ export default function WavelengthGamePage() {
           />
         );
       case 'lobby':
-        return gameSettings ? (
+        return gameData ? (
           <GameWaitingRoom
-            roomName={gameSettings.roomName}
-            roomCode={roomCode}
+            roomId={gameData.roomId}
+            roomName={gameData.gameSettings.roomName}
+            roomCode={gameData.roomCode}
             playerName={playerName}
-            isHost={true}
+            playerId={gameData.playerId}
+            peerId={gameData.peerId}
+            isHost={isHost}
             onStartGame={handleStartGame}
-            onAssignPsychic={handleAssignPsychic}
             onBack={handleBackToMenu}
           />
         ) : null;
       case 'join-room':
         return (
-          <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-            <div className="text-white text-center">
-              <h1 className="text-4xl font-bold text-teal-400 mb-4">JOIN ROOM</h1>
-              <p className="text-fuchsia-400 text-xl">Coming soon...</p>
-              <p className="text-zinc-400 mt-4">Player: {playerName}</p>
-            </div>
-          </div>
+          <JoinRoomForm
+            playerName={playerName}
+            onJoinGame={handleJoinGame}
+            onBack={handleBackToMenu}
+          />
         );
       case 'game':
-        return gameSettings ? (
+        return gameData && roundData ? (
           <ActiveGameScreen
-            roomName={gameSettings.roomName}
-            round={1}
-            maxRounds={gameSettings.numberOfRounds}
-            score={0}
-            lives={gameSettings.numberOfLives}
-            maxLives={gameSettings.numberOfLives}
+            roomId={gameData.roomId}
+            roomName={gameData.gameSettings.roomName}
+            round={roundData.gameState.current_round}
+            maxRounds={gameData.gameSettings.numberOfRounds}
+            score={roundData.gameState.team_score}
+            lives={roundData.gameState.lives_remaining}
+            maxLives={gameData.gameSettings.numberOfLives}
+            playerId={gameData.playerId}
             playerName={playerName}
+            peerId={gameData.peerId}
+            leftConcept={roundData.round.left_concept}
+            rightConcept={roundData.round.right_concept}
+            psychicHint={roundData.round.psychic_hint}
+            targetPosition={roundData.round.target_position}
             onLockInGuess={handleLockInGuess}
             onBack={handleBackToLobby}
           />

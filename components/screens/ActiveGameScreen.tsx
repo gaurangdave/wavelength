@@ -1,15 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useWavelengthP2P } from '@/lib/hooks/useWavelengthP2P';
+import { lockDialPosition } from '@/lib/api-client';
 
 interface ActiveGameScreenProps {
+  roomId: string;
   roomName: string;
   round: number;
   maxRounds: number;
   score: number;
   lives: number;
   maxLives: number;
+  playerId: string;
   playerName: string;
+  peerId: string;
+  leftConcept: string;
+  rightConcept: string;
+  psychicHint: string;
+  targetPosition?: number;
   onLockInGuess?: (position: number) => void;
   onBack?: () => void;
 }
@@ -20,28 +29,64 @@ interface Player {
   isPsychic: boolean;
 }
 
+interface OtherPlayerDial {
+  playerId: string;
+  playerName: string;
+  position: number;
+  isLocked: boolean;
+}
+
 export default function ActiveGameScreen({
+  roomId,
   roomName,
   round = 1,
   maxRounds = 5,
   score = 0,
   lives = 3,
   maxLives = 3,
+  playerId,
   playerName,
+  peerId,
+  leftConcept,
+  rightConcept,
+  psychicHint,
+  targetPosition,
   onLockInGuess,
   onBack
 }: ActiveGameScreenProps) {
-  // Hardcoded game data
-  const leftConcept = "BAD MOVIE";
-  const rightConcept = "GOOD MOVIE";
-  const psychicHint = "THE ROOM (2003)";
-  const targetPosition = 20; // 20% mark
   const targetWidth = 10; // 10% wide
   
   const [dialPosition, setDialPosition] = useState(50); // Current needle position - now dynamic
   const [isDragging, setIsDragging] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [glitchEffect, setGlitchEffect] = useState(false);
+  const [otherPlayerDials, setOtherPlayerDials] = useState<OtherPlayerDial[]>([]);
+
+  // Initialize P2P for dial synchronization
+  const p2p = useWavelengthP2P({
+    peerId,
+    onDialUpdate: (updatedPlayerId, updatedPlayerName, position, updatedIsLocked) => {
+      // Update other players' dial positions
+      setOtherPlayerDials(prev => {
+        const existing = prev.find(d => d.playerId === updatedPlayerId);
+        if (existing) {
+          return prev.map(d => 
+            d.playerId === updatedPlayerId 
+              ? { ...d, position, isLocked: updatedIsLocked }
+              : d
+          );
+        } else {
+          return [...prev, { playerId: updatedPlayerId, playerName: updatedPlayerName, position, isLocked: updatedIsLocked }];
+        }
+      });
+    }
+  });
+
+  // Join P2P room
+  useEffect(() => {
+    p2p.joinRoom(roomId);
+    return () => p2p.leaveRoom();
+  }, [roomId]);
 
   // Scoring zones (like the original Wavelength game)
   const scoringZones = [
@@ -96,6 +141,8 @@ export default function ActiveGameScreen({
     if (dialElement) {
       const newPosition = calculateAngleFromPointer(event.clientX, event.clientY, dialElement);
       setDialPosition(newPosition);
+      // Broadcast dial position via P2P
+      p2p.sendDialUpdate(playerId, playerName, newPosition, false);
     }
   };
 
@@ -108,6 +155,8 @@ export default function ActiveGameScreen({
     if (dialElement) {
       const newPosition = calculateAngleFromPointer(touch.clientX, touch.clientY, dialElement);
       setDialPosition(newPosition);
+      // Broadcast dial position via P2P
+      p2p.sendDialUpdate(playerId, playerName, newPosition, false);
     }
   };
 
@@ -158,9 +207,22 @@ export default function ActiveGameScreen({
     return () => clearInterval(interval);
   }, []);
 
-  const handleLockIn = () => {
+  const handleLockIn = async () => {
     setIsLocked(true);
-    onLockInGuess?.(dialPosition);
+    
+    try {
+      // Save to database
+      await lockDialPosition(roomId, round, playerId, dialPosition);
+      
+      // Broadcast locked position via P2P
+      p2p.sendDialUpdate(playerId, playerName, dialPosition, true);
+      
+      onLockInGuess?.(dialPosition);
+    } catch (err) {
+      console.error('Failed to lock position:', err);
+      // Revert lock state on error
+      setIsLocked(false);
+    }
   };
 
   // Calculate needle angle (-90 to 90 degrees for semicircle)
@@ -278,32 +340,34 @@ export default function ActiveGameScreen({
                    style={{ borderBottom: 'none' }}></div>
               <div className="absolute inset-2 rounded-t-full border border-zinc-800" 
                    style={{ borderBottom: 'none' }}></div>
-            </div>
-
-            {/* Position Markers */}
-            <div className="absolute inset-0">
-              {[0, 25, 50, 75, 100].map((pos) => {
-                const angle = -90 + (pos / 100) * 180;
-                const radians = (angle * Math.PI) / 180;
-                const radius = 250;
-                const x = 250 + radius * Math.cos(radians);
-                const y = 250 + radius * Math.sin(radians);
-                
+              
+              {/* Other players' dial indicators */}
+              {otherPlayerDials.map((otherDial) => {
+                const otherNeedleAngle = -90 + (otherDial.position / 100) * 180;
                 return (
                   <div
-                    key={pos}
-                    className="absolute text-xs font-bold text-gray-400"
-                    style={{
-                      left: `${(x / 500) * 100}%`,
-                      top: `${(y / 250) * 100}%`,
-                      transform: 'translate(-50%, -50%)'
-                    }}
+                    key={otherDial.playerId}
+                    className="absolute bottom-0 left-1/2 w-8 h-[200px] pointer-events-none"
+                    style={{ transform: 'translateX(-50%)' }}
                   >
-                    {pos}%
+                    {/* Other player's needle */}
+                    <div
+                      className="absolute bottom-0 left-1/2 w-1 h-[180px] rounded-t-full opacity-60"
+                      style={{
+                        background: otherDial.isLocked ? 'rgb(34, 197, 94)' : 'rgb(99, 102, 241)',
+                        transformOrigin: 'bottom center',
+                        transform: `translateX(-50%) rotate(${otherNeedleAngle}deg)`,
+                        boxShadow: otherDial.isLocked 
+                          ? '0 0 10px rgba(34, 197, 94, 0.6)' 
+                          : '0 0 10px rgba(99, 102, 241, 0.4)'
+                      }}
+                    />
                   </div>
                 );
               })}
             </div>
+
+
 
             {/* Needle Container */}
             <div 
@@ -360,37 +424,16 @@ export default function ActiveGameScreen({
               </div>
             </div>
 
-            {/* Score indicators on dial */}
-            <div className="absolute inset-0 pointer-events-none">
-              {[
-                { pos: targetPosition, label: '4', color: '#ef4444' },
-                { pos: targetPosition - 2, label: '3', color: '#f97316' },
-                { pos: targetPosition + 4, label: '3', color: '#f97316' },
-                { pos: targetPosition - 4, label: '2', color: '#eab308' },
-                { pos: targetPosition + 6, label: '2', color: '#eab308' },
-              ].map((item, index) => {
-                if (item.pos < 0 || item.pos > 100) return null;
-                const angle = -90 + (item.pos / 100) * 180;
-                const radians = (angle * Math.PI) / 180;
-                const radius = 160;
-                const x = 250 + radius * Math.cos(radians);
-                const y = 250 + radius * Math.sin(radians);
-                
-                return (
-                  <div
-                    key={`score-${index}`}
-                    className="absolute text-sm font-bold drop-shadow-md"
-                    style={{
-                      left: `${(x / 500) * 100}%`,
-                      top: `${(y / 250) * 100}%`,
-                      transform: 'translate(-50%, -50%)',
-                      color: item.color
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                );
-              })}
+
+          </div>
+
+          {/* Spectrum Extremes Labels */}
+          <div className="absolute top-0 left-0 right-0 flex justify-between items-center px-4 -mt-4">
+            <div className="text-lg lg:text-xl font-bold text-teal-400 tracking-wider uppercase">
+              {leftConcept}
+            </div>
+            <div className="text-lg lg:text-xl font-bold text-teal-400 tracking-wider uppercase">
+              {rightConcept}
             </div>
           </div>
 
