@@ -2,6 +2,46 @@
 
 import { useState } from 'react';
 import { useGameStore } from '@/lib/store';
+import {
+  ScreenContainer,
+  GeometricBackground,
+  CornerAccents,
+  GameCard,
+  Button,
+  ErrorMessage,
+  StatusIndicator
+} from '@/components/ui/GameComponents';
+
+// Custom component for room code visual display
+interface RoomCodeDisplayProps {
+  code: string;
+}
+
+function RoomCodeDisplay({ code }: RoomCodeDisplayProps) {
+  return (
+    <div className="bg-zinc-800 border border-zinc-700 p-4 text-center">
+      <div className="text-xs text-gray-400 uppercase tracking-wide mb-2">
+        Room code format
+      </div>
+      <div className="flex justify-center space-x-2">
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className={`
+              w-8 h-10 border-2 flex items-center justify-center font-mono font-bold
+              ${i < code.length 
+                ? 'border-teal-500 text-teal-400 bg-teal-500/10' 
+                : 'border-zinc-600 text-zinc-600'
+              }
+            `}
+          >
+            {code[i] || '·'}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function JoinRoomForm() {
   const playerName = useGameStore(state => state.playerName);
@@ -48,19 +88,12 @@ export default function JoinRoomForm() {
   const isFormValid = roomCode.length === 6;
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center relative overflow-hidden px-4">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-1/4 left-1/4 w-32 h-32 border border-zinc-800 rounded-full"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-40 h-40 border border-zinc-800"></div>
-        <div className="absolute top-3/4 left-1/3 w-24 h-24 border border-zinc-800 rotate-45"></div>
-        <div className="absolute top-1/6 right-1/3 w-36 h-36 border border-zinc-800 rounded-full"></div>
-      </div>
-
-      {/* Main Form Container */}
-      <div className="relative z-10 w-full max-w-2xl">
-        <div className="bg-zinc-900 border-2 border-teal-600 shadow-[0_0_30px_rgba(20,184,166,0.2)] p-8 lg:p-12">
-          
+    <ScreenContainer>
+      <GeometricBackground />
+      <CornerAccents color="psychic" />
+      
+      <div className="relative z-10 w-full max-w-2xl mx-auto">
+        <GameCard variant="psychic" className="p-8 lg:p-12">
           {/* Header */}
           <div className="text-center mb-10">
             <h1 className="text-3xl lg:text-4xl font-bold text-white tracking-widest uppercase mb-4">
@@ -75,7 +108,6 @@ export default function JoinRoomForm() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-8">
-            
             {/* Room Code Input */}
             <div className="space-y-3">
               <label className="block text-gray-400 text-sm font-bold tracking-widest uppercase text-center">
@@ -113,89 +145,50 @@ export default function JoinRoomForm() {
             </div>
 
             {/* Room Code Format Helper */}
-            <div className="bg-zinc-800 border border-zinc-700 p-4 text-center">
-              <div className="text-xs text-gray-400 uppercase tracking-wide mb-2">
-                Room code format
-              </div>
-              <div className="flex justify-center space-x-2">
-                {[...Array(6)].map((_, i) => (
-                  <div
-                    key={i}
-                    className={`
-                      w-8 h-10 border-2 flex items-center justify-center font-mono font-bold
-                      ${i < roomCode.length 
-                        ? 'border-teal-500 text-teal-400 bg-teal-500/10' 
-                        : 'border-zinc-600 text-zinc-600'
-                      }
-                    `}
-                  >
-                    {roomCode[i] || '·'}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <RoomCodeDisplay code={roomCode} />
 
             {/* Error Message */}
-            {error && (
-              <div className="bg-red-900/50 border-2 border-red-600 px-4 py-3 text-red-300 text-center font-medium tracking-wide">
-                {error}
-              </div>
-            )}
+            {error && <ErrorMessage>{error}</ErrorMessage>}
 
             {/* Action Buttons */}
             <div className="space-y-4 pt-6">
-              <button
+              <Button
                 type="submit"
                 disabled={!isFormValid || isLoading}
-                className={`
-                  w-full py-4 px-8 text-xl font-bold text-white uppercase tracking-widest
-                  transition-all duration-300 border-2 border-teal-600
-                  ${isFormValid && !isLoading
-                    ? 'bg-teal-600 hover:bg-teal-700 hover:shadow-[0_0_30px_rgba(20,184,166,0.5)] cursor-pointer'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
-                  }
-                `}
+                variant="primary"
+                size="large"
+                fullWidth
               >
                 {isLoading ? 'JOINING...' : 'JOIN GAME'}
-              </button>
+              </Button>
               
-              <button
+              <Button
                 type="button"
                 onClick={backToMenu}
                 disabled={isLoading}
-                className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="secondary"
+                size="medium"
+                fullWidth
               >
                 ← BACK TO MENU
-              </button>
+              </Button>
             </div>
           </form>
 
-          {/* Status Indicator */}
+          {/* Status Indicators */}
           {isFormValid && !isLoading && (
             <div className="text-center mt-6">
-              <div className="flex items-center justify-center space-x-2 text-teal-400 text-sm font-medium tracking-wide uppercase">
-                <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
-                <span>READY TO JOIN</span>
-              </div>
+              <StatusIndicator status="ready">READY TO JOIN</StatusIndicator>
             </div>
           )}
 
           {isLoading && (
             <div className="text-center mt-6">
-              <div className="flex items-center justify-center space-x-2 text-yellow-400 text-sm font-medium tracking-wide uppercase">
-                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-ping"></div>
-                <span>CONNECTING TO ROOM...</span>
-              </div>
+              <StatusIndicator status="connecting">CONNECTING TO ROOM...</StatusIndicator>
             </div>
           )}
-        </div>
+        </GameCard>
       </div>
-
-      {/* Corner Accents */}
-      <div className="absolute top-0 left-0 w-20 h-20 border-r-2 border-b-2 border-teal-500 opacity-30"></div>
-      <div className="absolute top-0 right-0 w-20 h-20 border-l-2 border-b-2 border-teal-500 opacity-30"></div>
-      <div className="absolute bottom-0 left-0 w-20 h-20 border-r-2 border-t-2 border-teal-500 opacity-30"></div>
-      <div className="absolute bottom-0 right-0 w-20 h-20 border-l-2 border-t-2 border-teal-500 opacity-30"></div>
-    </div>
+    </ScreenContainer>
   );
 }

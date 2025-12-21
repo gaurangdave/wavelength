@@ -1,26 +1,201 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base Colors */
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  
+  /* Theme Colors - Primary Palette */
+  --color-psychic: #ec4899;      /* Fuchsia/Pink - Psychic role */
+  --color-player: #14b8a6;       /* Teal/Cyan - Player/Team */
+  --color-accent: #eab308;       /* Yellow - Points/Scoring */
+  --color-danger: #ef4444;       /* Red - Errors/Lives */
+  --color-success: #10b981;      /* Green - Success states */
+  --color-info: #3b82f6;         /* Blue - Information */
+  --color-purple: #a855f7;       /* Purple - Alternative accent */
+  
+  /* Background Shades */
+  --bg-primary: #09090b;         /* zinc-950 */
+  --bg-secondary: #18181b;       /* zinc-900 */
+  --bg-tertiary: #27272a;        /* zinc-800 */
+  --bg-hover: #3f3f46;           /* zinc-700 */
+  
+  /* Border Colors */
+  --border-primary: #27272a;     /* zinc-800 */
+  --border-secondary: #3f3f46;   /* zinc-700 */
+  --border-accent: #52525b;      /* zinc-600 */
+  
+  /* Text Colors */
+  --text-primary: #ffffff;       /* White */
+  --text-secondary: #e4e4e7;     /* zinc-200 */
+  --text-tertiary: #a1a1aa;      /* zinc-400 */
+  --text-muted: #71717a;         /* zinc-500 */
+  --text-disabled: #52525b;      /* zinc-600 */
+  
+  /* Gradient Colors for Dial Scoring */
+  --dial-empty: #3f3f46;         /* zinc-700 - empty zone */
+  --dial-close: #06b6d4;         /* cyan-500 - 1 point */
+  --dial-good: #eab308;          /* yellow-500 - 2 points */
+  --dial-great: #f97316;         /* orange-500 - 3 points */
+  --dial-perfect: #ef4444;       /* red-500 - 4 points */
+  
+  /* Shadow Colors */
+  --shadow-psychic: rgba(236, 72, 153, 0.3);
+  --shadow-player: rgba(20, 184, 166, 0.3);
+  --shadow-accent: rgba(234, 179, 8, 0.3);
+  
+  /* Component-specific */
+  --card-border-width: 2px;
+  --card-padding: 2rem;
+  --corner-accent-size: 4rem;
+  
+  /* Animation timing */
+  --transition-fast: 150ms;
+  --transition-normal: 300ms;
+  --transition-slow: 500ms;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Utility Classes for Theme */
+.bg-game {
+  background-color: var(--bg-primary);
+}
+
+.bg-card {
+  background-color: var(--bg-secondary);
+}
+
+.bg-card-hover {
+  background-color: var(--bg-tertiary);
+}
+
+.border-game {
+  border-color: var(--border-primary);
+}
+
+.border-game-secondary {
+  border-color: var(--border-secondary);
+}
+
+.text-game-primary {
+  color: var(--text-primary);
+}
+
+.text-game-secondary {
+  color: var(--text-secondary);
+}
+
+.text-psychic {
+  color: var(--color-psychic);
+}
+
+.text-player {
+  color: var(--color-player);
+}
+
+.text-accent {
+  color: var(--color-accent);
+}
+
+.border-psychic {
+  border-color: var(--color-psychic);
+}
+
+.border-player {
+  border-color: var(--color-player);
+}
+
+.bg-psychic {
+  background-color: var(--color-psychic);
+}
+
+.bg-player {
+  background-color: var(--color-player);
+}
+
+.shadow-psychic {
+  box-shadow: 0 0 30px var(--shadow-psychic);
+}
+
+.shadow-player {
+  box-shadow: 0 0 30px var(--shadow-player);
+}
+
+/* Corner Accents Component */
+.corner-accent {
+  position: absolute;
+  width: var(--corner-accent-size);
+  height: var(--corner-accent-size);
+  border-width: 2px;
+  opacity: 0.3;
+}
+
+.corner-accent-tl {
+  top: 0;
+  left: 0;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+
+.corner-accent-tr {
+  top: 0;
+  right: 0;
+  border-left-width: 2px;
+  border-bottom-width: 2px;
+}
+
+.corner-accent-bl {
+  bottom: 0;
+  left: 0;
+  border-right-width: 2px;
+  border-top-width: 2px;
+}
+
+.corner-accent-br {
+  bottom: 0;
+  right: 0;
+  border-left-width: 2px;
+  border-top-width: 2px;
+}
+
+/* Geometric Background Pattern */
+.geometric-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+}
+
+/* Card Styles */
+.game-card {
+  background-color: var(--bg-secondary);
+  border: var(--card-border-width) solid;
+  padding: var(--card-padding);
+  transition: all var(--transition-normal) ease-out;
+}
+
+.game-card-psychic {
+  border-color: var(--color-psychic);
+  box-shadow: 0 0 30px var(--shadow-psychic);
+}
+
+.game-card-player {
+  border-color: var(--color-player);
+  box-shadow: 0 0 30px var(--shadow-player);
+}
+
+.game-card-hover:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 40px var(--shadow-psychic);
 }

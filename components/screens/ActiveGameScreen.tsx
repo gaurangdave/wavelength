@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/lib/store";
 import { useDialUpdates } from "@/lib/hooks/useRealtimeSubscriptions";
+import {
+  ConceptPair,
+  PsychicHint
+} from "@/components/ui/GameComponents";
+import { createDialGradient } from "@/lib/theme";
 
 // Extend Window interface for throttling
 declare global {
@@ -23,6 +28,131 @@ interface OtherPlayerDial {
   playerName: string;
   position: number;
   isLocked: boolean;
+}
+
+// HUD Display Component
+interface GameHUDProps {
+  roomName: string;
+  round: number;
+  maxRounds: number;
+  score: number;
+  lives: number;
+  maxLives: number;
+}
+
+function GameHUD({ roomName, round, maxRounds, score, lives, maxLives }: GameHUDProps) {
+  return (
+    <div className="bg-zinc-900 border-b-2 border-zinc-700 px-6 py-4 flex justify-between items-center">
+      <div className="flex items-center space-x-6">
+        <h1 className="text-xl font-bold text-white tracking-wider uppercase">
+          {roomName}
+        </h1>
+        <div className="text-fuchsia-400 font-medium tracking-wide">
+          ROUND {round}/{maxRounds}
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-2">
+          <span className="text-teal-400 font-bold tracking-wide">SCORE:</span>
+          <span className="text-white text-xl font-bold">{score}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-fuchsia-400 font-bold tracking-wide">LIVES:</span>
+          <div className="flex space-x-1">
+            {Array.from({ length: maxLives }, (_, i) => (
+              <div
+                key={i}
+                className={`text-xl ${i < lives ? "text-fuchsia-500" : "text-zinc-600"}`}
+              >
+                ♥
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Player Status Footer Component
+interface PlayerStatusBarProps {
+  players: Player[];
+}
+
+function PlayerStatusBar({ players }: PlayerStatusBarProps) {
+  return (
+    <div className="bg-zinc-900 border-t-2 border-zinc-700 px-6 py-4">
+      <div className="max-w-4xl mx-auto flex items-center justify-center space-x-6">
+        <div className="text-gray-400 text-sm font-bold tracking-widest uppercase">
+          PARTICIPANTS:
+        </div>
+        <div className="flex space-x-4">
+          {players.map((player) => (
+            <div
+              key={player.id}
+              className={`
+                flex items-center space-x-2 px-3 py-2 border-2 bg-zinc-800
+                ${player.isPsychic
+                  ? "border-teal-500 text-teal-400 shadow-[0_0_10px_rgba(20,184,166,0.3)]"
+                  : "border-zinc-600 text-white"
+                }
+              `}
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  player.isPsychic ? "bg-teal-400" : "bg-zinc-500"
+                }`}
+              ></div>
+              <span className="text-sm font-medium">{player.name}</span>
+              {player.isPsychic && (
+                <span className="text-xs uppercase">(PSYCHIC)</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Dial Position Indicator Component
+interface DialPositionIndicatorProps {
+  dialPosition: number;
+  isDragging: boolean;
+  isLocked: boolean;
+  isPsychic: boolean;
+}
+
+function DialPositionIndicator({ dialPosition, isDragging, isLocked, isPsychic }: DialPositionIndicatorProps) {
+  return (
+    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-20">
+      <div className="text-center">
+        <div
+          className={`text-2xl font-bold tracking-wider mb-1 transition-all duration-200 ${
+            isDragging ? "text-pink-400 scale-110" : "text-fuchsia-500"
+          }`}
+        >
+          {Math.round(dialPosition)}%
+        </div>
+        <div className="text-gray-400 text-sm uppercase tracking-wide mb-2">
+          {isLocked
+            ? "LOCKED GUESS"
+            : isDragging
+            ? "⟷ DRAGGING ⟷"
+            : isPsychic
+            ? "WATCHING"
+            : "CURRENT GUESS"}
+        </div>
+
+        {!isLocked && !isPsychic && (
+          <div className="text-xs text-teal-400 mt-2 uppercase tracking-wide">
+            Click and drag to adjust
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ActiveGameScreen() {
@@ -321,31 +451,6 @@ export default function ActiveGameScreen() {
   // Calculate needle angle (-90 to 90 degrees for semicircle)
   const needleAngle = -90 + (dialPosition / 100) * 180;
 
-  // Create gradient for scoring zones
-  const createDialGradient = () => {
-    const targetAngle = targetPos * 1.8 - 90; // Convert percentage to degrees
-
-    console.log(
-      "[ActiveGame] Creating gradient - isPsychic:",
-      isPsychic,
-      "targetPos:",
-      targetPos,
-      "targetAngle:",
-      targetAngle
-    );
-
-    return `conic-gradient(
-      from -90deg at 50% 100%,
-      rgb(63, 63, 70) 0deg ${targetAngle - 22.5 + 90}deg,
-      #06b6d4 ${targetAngle - 22.5 + 90}deg ${targetAngle - 13.5 + 90}deg,
-      #eab308 ${targetAngle - 13.5 + 90}deg ${targetAngle - 4.5 + 90}deg,
-      #f97316 ${targetAngle - 4.5 + 90}deg ${targetAngle + 4.5 + 90}deg,
-      #ef4444 ${targetAngle + 4.5 + 90}deg ${targetAngle + 13.5 + 90}deg,
-      #f97316 ${targetAngle + 13.5 + 90}deg ${targetAngle + 22.5 + 90}deg,
-      rgb(63, 63, 70) ${targetAngle + 22.5 + 90}deg 180deg
-    )`;
-  };
-
   // Early return after all hooks
   if (!gameData || !roundData) return null;
 
@@ -362,10 +467,10 @@ export default function ActiveGameScreen() {
   const targetPos = targetPosition ?? 50; // Default to center if not provided
 
   console.log(
-    "[ActiveGame] Component render - playerId:",
-    gameData.playerId,
-    "psychicId:",
-    roundData.gameState.current_psychic_id,
+    "[ActiveGame] Gradient values - targetPosition:",
+    targetPosition,
+    "targetPos:",
+    targetPos,
     "isPsychic:",
     isPsychic
   );
@@ -373,84 +478,23 @@ export default function ActiveGameScreen() {
   return (
     <div className="min-h-screen bg-zinc-950 relative overflow-hidden">
       {/* Top HUD Bar */}
-      <div className="bg-zinc-900 border-b-2 border-zinc-700 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center space-x-6">
-          <h1 className="text-xl font-bold text-white tracking-wider uppercase">
-            {roomName}
-          </h1>
-          <div className="text-fuchsia-400 font-medium tracking-wide">
-            ROUND {round}/{maxRounds}
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-2">
-            <span className="text-teal-400 font-bold tracking-wide">
-              SCORE:
-            </span>
-            <span className="text-white text-xl font-bold">{score}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-fuchsia-400 font-bold tracking-wide">
-              LIVES:
-            </span>
-            <div className="flex space-x-1">
-              {Array.from({ length: maxLives }, (_, i) => (
-                <div
-                  key={i}
-                  className={`text-xl ${
-                    i < lives ? "text-fuchsia-500" : "text-zinc-600"
-                  }`}
-                >
-                  ♥
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <GameHUD
+        roomName={roomName}
+        round={round}
+        maxRounds={maxRounds}
+        score={score}
+        lives={lives}
+        maxLives={maxLives}
+      />
 
       {/* Upper Game Area - Binary Concepts */}
       <div className="px-6 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Binary Card */}
-          <div className="bg-zinc-900 border-2 border-teal-500 shadow-[0_0_25px_rgba(20,184,166,0.3)] p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="text-2xl lg:text-3xl font-bold text-teal-400 tracking-wider uppercase">
-                {leftConcept}
-              </div>
-
-              {/* Digital Connection Line */}
-              <div className="flex-1 mx-8 flex items-center">
-                <div className="flex-1 h-0.5 bg-gradient-to-r from-teal-500 via-zinc-600 to-teal-500"></div>
-                <div className="text-teal-500 mx-4 text-2xl">⟷</div>
-                <div className="flex-1 h-0.5 bg-gradient-to-r from-teal-500 via-zinc-600 to-teal-500"></div>
-              </div>
-
-              <div className="text-2xl lg:text-3xl font-bold text-teal-400 tracking-wider uppercase">
-                {rightConcept}
-              </div>
-            </div>
-          </div>
+          <ConceptPair leftConcept={leftConcept} rightConcept={rightConcept} />
 
           {/* Psychic's Hint */}
-          <div className="text-center mb-8">
-            <div className="bg-zinc-900 border-2 border-fuchsia-600 inline-block px-8 py-6 relative overflow-hidden">
-              {/* Scanline effect */}
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-fuchsia-500/10 to-transparent opacity-50 animate-pulse"></div>
-
-              <div className="text-gray-400 text-sm font-bold tracking-widest uppercase mb-2">
-                PSYCHIC TRANSMISSION
-              </div>
-              <div
-                className={`text-3xl lg:text-4xl font-bold text-white tracking-wider transition-all duration-100 ${
-                  glitchEffect ? "animate-pulse text-fuchsia-500" : ""
-                }`}
-              >
-                &ldquo;{psychicHint}&rdquo;
-              </div>
-            </div>
-          </div>
+          <PsychicHint hint={psychicHint} glitchEffect={glitchEffect} />
         </div>
       </div>
 
@@ -475,18 +519,9 @@ export default function ActiveGameScreen() {
             <div
               className="absolute w-full h-full rounded-t-full overflow-hidden shadow-2xl"
               style={{
-                background: (() => {
-                  const bg = isPsychic
-                    ? createDialGradient()
-                    : "rgb(63, 63, 70)";
-                  console.log(
-                    "[ActiveGame] Applying background - isPsychic:",
-                    isPsychic,
-                    "background:",
-                    bg
-                  );
-                  return bg;
-                })(),
+                background: isPsychic
+                  ? createDialGradient(targetPos)
+                  : "rgb(63, 63, 70)",
                 boxShadow:
                   "inset 0 5px 15px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5)",
               }}
@@ -577,32 +612,12 @@ export default function ActiveGameScreen() {
           </div>
 
           {/* Current Position Indicator with Score Zone Info */}
-          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-20">
-            <div className="text-center">
-              <div
-                className={`text-2xl font-bold tracking-wider mb-1 transition-all duration-200 ${
-                  isDragging ? "text-pink-400 scale-110" : "text-fuchsia-500"
-                }`}
-              >
-                {Math.round(dialPosition)}%
-              </div>
-              <div className="text-gray-400 text-sm uppercase tracking-wide mb-2">
-                {isLocked
-                  ? "LOCKED GUESS"
-                  : isDragging
-                  ? "⟷ DRAGGING ⟷"
-                  : isPsychic
-                  ? "WATCHING"
-                  : "CURRENT GUESS"}
-              </div>
-
-              {!isLocked && !isPsychic && (
-                <div className="text-xs text-teal-400 mt-2 uppercase tracking-wide">
-                  Click and drag to adjust
-                </div>
-              )}
-            </div>
-          </div>
+          <DialPositionIndicator
+            dialPosition={dialPosition}
+            isDragging={isDragging}
+            isLocked={isLocked}
+            isPsychic={isPsychic}
+          />
         </div>
       </div>
 
@@ -635,38 +650,7 @@ export default function ActiveGameScreen() {
       </div>
 
       {/* Footer - Player Status */}
-      <div className="bg-zinc-900 border-t-2 border-zinc-700 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-center space-x-6">
-          <div className="text-gray-400 text-sm font-bold tracking-widest uppercase">
-            PARTICIPANTS:
-          </div>
-          <div className="flex space-x-4">
-            {players.map((player) => (
-              <div
-                key={player.id}
-                className={`
-                  flex items-center space-x-2 px-3 py-2 border-2 bg-zinc-800
-                  ${
-                    player.isPsychic
-                      ? "border-teal-500 text-teal-400 shadow-[0_0_10px_rgba(20,184,166,0.3)]"
-                      : "border-zinc-600 text-white"
-                  }
-                `}
-              >
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    player.isPsychic ? "bg-teal-400" : "bg-zinc-500"
-                  }`}
-                ></div>
-                <span className="text-sm font-medium">{player.name}</span>
-                {player.isPsychic && (
-                  <span className="text-xs uppercase">(PSYCHIC)</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <PlayerStatusBar players={players} />
 
       {/* Back button for testing */}
       <div className="absolute top-20 left-4">

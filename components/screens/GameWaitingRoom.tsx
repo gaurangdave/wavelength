@@ -4,6 +4,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { getPlayers } from '@/lib/api-client';
 import { useGameStore } from '@/lib/store';
 import { useGameRoomStatusUpdates } from '@/lib/hooks/useRealtimeSubscriptions';
+import {
+  ScreenContainer,
+  GeometricBackground,
+  CornerAccents,
+  GameCard,
+  Button,
+  StatusIndicator
+} from '@/components/ui/GameComponents';
 
 interface Player {
   id: string;
@@ -20,6 +28,72 @@ interface FetchedPlayer {
   is_host: boolean;
   is_connected: boolean;
   is_psychic: boolean;
+}
+
+// Custom Room Code Display Component
+interface RoomCodeCardProps {
+  roomCode: string;
+}
+
+function RoomCodeCard({ roomCode }: RoomCodeCardProps) {
+  return (
+    <div className="bg-zinc-900 border-2 border-fuchsia-600 inline-block px-8 py-4 mb-6">
+      <div className="text-gray-400 text-sm font-bold tracking-widest uppercase mb-1">
+        ROOM CODE
+      </div>
+      <div className="text-3xl lg:text-4xl font-mono font-bold text-fuchsia-500 tracking-widest">
+        {roomCode}
+      </div>
+    </div>
+  );
+}
+
+// Custom Player Card Component
+interface PlayerCardProps {
+  player: Player;
+}
+
+function PlayerCard({ player }: PlayerCardProps) {
+  const borderColor = player.isYou 
+    ? 'border-fuchsia-500 shadow-[0_0_15px_rgba(236,72,153,0.3)]'
+    : player.isPsychic
+    ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
+    : 'border-teal-600 hover:border-teal-500';
+
+  const avatarColor = player.isYou
+    ? 'bg-fuchsia-600 text-white'
+    : player.isPsychic
+    ? 'bg-yellow-500 text-black'
+    : 'bg-teal-600 text-white';
+
+  const nameColor = player.isYou ? 'text-fuchsia-400' : 'text-white';
+  const avatarLetter = player.isHost ? 'H' : player.isPsychic ? 'P' : 'U';
+  const roleLabel = player.isHost ? 'Front Man' : player.isPsychic ? 'Psychic' : 'Player';
+
+  return (
+    <div className={`bg-zinc-900 border-2 p-4 transition-all duration-300 ${borderColor}`}>
+      <div className="flex items-center space-x-3">
+        {/* Player Avatar */}
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${avatarColor}`}>
+          {avatarLetter}
+        </div>
+        
+        {/* Player Info */}
+        <div className="flex-1">
+          <div className={`font-bold tracking-wide ${nameColor}`}>
+            {player.name}
+            {player.isYou && ' (YOU)'}
+          </div>
+          <div className="text-xs text-gray-400 uppercase tracking-wide">
+            {roleLabel}
+          </div>
+        </div>
+
+        {/* Status Indicator */}
+        <div className={`w-2 h-2 rounded-full ${player.isConnected ? 'bg-teal-400 animate-pulse' : 'bg-zinc-600'}`}></div>
+      </div>
+    </div>
+  );
 }
 
 export default function GameWaitingRoom() {
@@ -105,14 +179,9 @@ export default function GameWaitingRoom() {
   if (!gameData) return null;
 
   return (
-    <div className="min-h-screen bg-zinc-950 relative overflow-hidden">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-1/5 left-1/5 w-28 h-28 border border-zinc-800 rounded-full"></div>
-        <div className="absolute bottom-1/5 right-1/5 w-32 h-32 border border-zinc-800"></div>
-        <div className="absolute top-2/3 left-1/4 w-20 h-20 border border-zinc-800 rotate-45"></div>
-        <div className="absolute top-1/4 right-1/3 w-36 h-36 border border-zinc-800 rounded-full"></div>
-      </div>
+    <ScreenContainer>
+      <GeometricBackground />
+      <CornerAccents color="mixed" />
 
       {/* Main Content */}
       <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
@@ -124,14 +193,7 @@ export default function GameWaitingRoom() {
           </h1>
           
           {/* Room Code */}
-          <div className="bg-zinc-900 border-2 border-fuchsia-600 inline-block px-8 py-4 mb-6">
-            <div className="text-gray-400 text-sm font-bold tracking-widest uppercase mb-1">
-              ROOM CODE
-            </div>
-            <div className="text-3xl lg:text-4xl font-mono font-bold text-fuchsia-500 tracking-widest">
-              {roomCode}
-            </div>
-          </div>
+          <RoomCodeCard roomCode={roomCode || ''} />
 
           <div className="text-teal-400 text-sm font-medium tracking-wide uppercase">
             Share this code with other players
@@ -147,50 +209,7 @@ export default function GameWaitingRoom() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {players.map((player) => (
-              <div 
-                key={player.id}
-                className={`
-                  bg-zinc-900 border-2 p-4 transition-all duration-300
-                  ${player.isYou 
-                    ? 'border-fuchsia-500 shadow-[0_0_15px_rgba(236,72,153,0.3)]' 
-                    : player.isPsychic
-                    ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
-                    : 'border-teal-600 hover:border-teal-500'
-                  }
-                `}
-              >
-                <div className="flex items-center space-x-3">
-                  {/* Player Avatar */}
-                  <div className={`
-                    w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
-                    ${player.isYou 
-                      ? 'bg-fuchsia-600 text-white' 
-                      : player.isPsychic
-                      ? 'bg-yellow-500 text-black'
-                      : 'bg-teal-600 text-white'
-                    }
-                  `}>
-                    {player.isHost ? 'H' : player.isPsychic ? 'P' : 'U'}
-                  </div>
-                  
-                  {/* Player Info */}
-                  <div className="flex-1">
-                    <div className={`
-                      font-bold tracking-wide
-                      ${player.isYou ? 'text-fuchsia-400' : 'text-white'}
-                    `}>
-                      {player.name}
-                      {player.isYou && ' (YOU)'}
-                    </div>
-                    <div className="text-xs text-gray-400 uppercase tracking-wide">
-                      {player.isHost ? 'Front Man' : player.isPsychic ? 'Psychic' : 'Player'}
-                    </div>
-                  </div>
-
-                  {/* Status Indicator */}
-                  <div className={`w-2 h-2 rounded-full ${player.isConnected ? 'bg-teal-400 animate-pulse' : 'bg-zinc-600'}`}></div>
-                </div>
-              </div>
+              <PlayerCard key={player.id} player={player} />
             ))}
           </div>
 
@@ -201,7 +220,7 @@ export default function GameWaitingRoom() {
 
         {/* Host Controls */}
         {isHost && (
-          <div className="bg-zinc-900 border-2 border-zinc-700 p-6 lg:p-8 mb-8">
+          <GameCard variant="neutral" className="p-6 lg:p-8 mb-8">
             <h3 className="text-lg font-bold text-gray-400 tracking-widest uppercase mb-6 text-center">
               HOST CONTROLS
             </h3>
@@ -221,7 +240,7 @@ export default function GameWaitingRoom() {
                 </div>
               )}
             </div>
-          </div>
+          </GameCard>
         )}
 
         {/* Action Buttons */}
@@ -252,21 +271,20 @@ export default function GameWaitingRoom() {
           </button>
           
           {/* Back Button */}
-          <button
+          <Button
             onClick={backToMenu}
-            className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
+            variant="secondary"
+            size="medium"
+            fullWidth
           >
             ← BACK TO MENU
-          </button>
+          </Button>
         </div>
 
         {/* Status Messages */}
         <div className="text-center mt-8">
           {isGameReady && selectedPsychic ? (
-            <div className="flex items-center justify-center space-x-2 text-teal-400 text-sm font-medium tracking-wide uppercase">
-              <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
-              <span>READY TO COMMENCE</span>
-            </div>
+            <StatusIndicator status="ready">READY TO COMMENCE</StatusIndicator>
           ) : (
             <div className="text-gray-500 text-sm font-medium tracking-wide uppercase">
               {!selectedPsychic ? 'Assign a Psychic to continue' : `Need at least 2 players (${players.length}/2)`}
@@ -274,12 +292,6 @@ export default function GameWaitingRoom() {
           )}
         </div>
       </div>
-
-      {/* Corner Accents */}
-      <div className="absolute top-0 left-0 w-16 h-16 border-r-2 border-b-2 border-fuchsia-500 opacity-30"></div>
-      <div className="absolute top-0 right-0 w-16 h-16 border-l-2 border-b-2 border-teal-400 opacity-30"></div>
-      <div className="absolute bottom-0 left-0 w-16 h-16 border-r-2 border-t-2 border-teal-400 opacity-30"></div>
-      <div className="absolute bottom-0 right-0 w-16 h-16 border-l-2 border-t-2 border-fuchsia-500 opacity-30"></div>
-    </div>
+    </ScreenContainer>
   );
 }

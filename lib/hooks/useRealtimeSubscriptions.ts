@@ -7,7 +7,7 @@ import { useGameStore } from '@/lib/store';
  * Non-host players use this to detect when the host starts the game
  */
 export function useGameRoomStatusUpdates(roomId: string | undefined, isHost: boolean) {
-  const { isLoading, startGame } = useGameStore();
+  const { isLoading, loadGameState } = useGameStore();
 
   useEffect(() => {
     if (!roomId || isHost) {
@@ -32,14 +32,8 @@ export function useGameRoomStatusUpdates(roomId: string | undefined, isHost: boo
         }
         
         if (data?.status === 'in_progress' && !isLoading) {
-          console.log('[useGameRoomStatus] Game started via polling');
-          const response = await fetch(`/api/game/state?roomId=${roomId}`);
-          if (response.ok) {
-            const gameData = await response.json();
-            if (gameData.currentRound && gameData.gameState) {
-              startGame();
-            }
-          }
+          console.log('[useGameRoomStatus] Game started via polling, loading state...');
+          await loadGameState();
         }
       } catch (err) {
         console.error('[useGameRoomStatus] Error in status check:', err);
@@ -64,19 +58,8 @@ export function useGameRoomStatusUpdates(roomId: string | undefined, isHost: boo
           console.log('[useGameRoomStatus] Room updated:', payload);
           
           if (payload.new?.status === 'in_progress' && !isLoading) {
-            console.log('[useGameRoomStatus] Game started via Realtime');
-            
-            try {
-              const response = await fetch(`/api/game/state?roomId=${roomId}`);
-              if (response.ok) {
-                const data = await response.json();
-                if (data.currentRound && data.gameState) {
-                  startGame();
-                }
-              }
-            } catch (err) {
-              console.error('[useGameRoomStatus] Failed to fetch game state:', err);
-            }
+            console.log('[useGameRoomStatus] Game started via Realtime, loading state...');
+            await loadGameState();
           }
         }
       )
@@ -89,7 +72,7 @@ export function useGameRoomStatusUpdates(roomId: string | undefined, isHost: boo
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [roomId, isHost, isLoading, startGame]);
+  }, [roomId, isHost, isLoading, loadGameState]);
 }
 
 /**

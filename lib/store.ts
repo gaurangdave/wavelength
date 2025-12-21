@@ -68,6 +68,8 @@ interface GameStore {
   
   startGame: () => Promise<void>;
   
+  loadGameState: () => Promise<void>;
+  
   assignRandomPsychic: () => Promise<{ psychicId: string } | null>;
   
   // Navigation actions
@@ -201,6 +203,44 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to start game.';
       console.error('[HOST] Failed to start game:', err);
+      set({ 
+        error: message,
+        isLoading: false 
+      });
+      throw err;
+    }
+  },
+
+  loadGameState: async () => {
+    const { gameData } = get();
+    if (!gameData?.roomId) {
+      const error = 'No room ID available';
+      set({ error });
+      throw new Error(error);
+    }
+    
+    set({ isLoading: true, error: null });
+    
+    try {
+      console.log('[PLAYER] Loading game state...');
+      const result = await api.getGameState(gameData.roomId);
+      console.log('[PLAYER] Game state loaded successfully:', result);
+      
+      if (result.currentRound && result.gameState) {
+        set({
+          roundData: {
+            round: result.currentRound,
+            gameState: result.gameState
+          },
+          currentScreen: 'game',
+          isLoading: false
+        });
+      } else {
+        throw new Error('Invalid game state received');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load game state.';
+      console.error('[PLAYER] Failed to load game state:', err);
       set({ 
         error: message,
         isLoading: false 
