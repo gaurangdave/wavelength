@@ -123,11 +123,9 @@ export function useDialUpdates(
     // Initial fetch
     fetchExistingDials();
 
-    // Polling fallback
+    // Polling fallback - always poll, not just when unlocked
     const pollInterval = setInterval(() => {
-      if (!isLocked) {
-        fetchExistingDials();
-      }
+      fetchExistingDials();
     }, 2000);
 
     // Realtime subscription

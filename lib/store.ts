@@ -72,6 +72,8 @@ interface GameStore {
   
   assignRandomPsychic: () => Promise<{ psychicId: string } | null>;
   
+  updateTargetPosition: (targetPosition: number) => void;
+  
   // Navigation actions
   resetGame: () => void;
   backToMenu: () => void;
@@ -235,6 +237,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
           currentScreen: 'game',
           isLoading: false
         });
+      } else if (result.gameState) {
+        // Game state exists but round might not be ready yet - still transition to game screen
+        console.log('[PLAYER] Game state exists but round not fully ready yet');
+        set({
+          roundData: null,
+          currentScreen: 'game',
+          isLoading: false
+        });
       } else {
         throw new Error('Invalid game state received');
       }
@@ -266,6 +276,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ error: message });
       return null;
     }
+  },
+
+  updateTargetPosition: (targetPosition: number) => {
+    const { roundData } = get();
+    if (!roundData) {
+      console.error('[Store] Cannot update target position - no round data');
+      return;
+    }
+    
+    set({
+      roundData: {
+        ...roundData,
+        round: {
+          ...roundData.round,
+          target_position: targetPosition
+        }
+      }
+    });
+    console.log(`[Store] Updated target position to ${targetPosition}`);
   },
 
   // Navigation Actions

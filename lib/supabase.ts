@@ -374,7 +374,7 @@ export async function createRound(
   roundNumber: number,
   leftConcept: string,
   rightConcept: string,
-  targetPosition: number
+  targetPosition: number | null
 ) {
   const { data, error } = await supabase
     .from('rounds')

@@ -211,6 +211,12 @@ export default function ResultsScreen() {
     const round = roundData.gameState.current_round;
     const targetPosition = roundData.round.target_position;
     
+    if (targetPosition === null || targetPosition === undefined) {
+      console.error('[ResultsScreen] Target position is null - cannot calculate scores');
+      setLoading(false);
+      return;
+    }
+    
     const fetchGuesses = async () => {
       try {
         const { data: dialData, error: dialError } = await supabase
@@ -221,6 +227,13 @@ export default function ResultsScreen() {
           .eq('is_locked', true);
 
         if (dialError) throw dialError;
+
+        if (!dialData || dialData.length === 0) {
+          console.log('[ResultsScreen] No locked guesses found');
+          setPlayerGuesses([]);
+          setLoading(false);
+          return;
+        }
 
         // Fetch player names
         const playerIds = dialData?.map(d => d.player_id) || [];
@@ -237,10 +250,14 @@ export default function ResultsScreen() {
           const distance = Math.abs(dial.dial_position - targetPosition);
           let points = 0;
           
-          if (distance <= 5) points = 4; // Perfect
-          else if (distance <= 10) points = 3; // Great
-          else if (distance <= 20) points = 2; // Good
-          else if (distance <= 30) points = 1; // Close
+          // Scoring zones based on distance from target
+          if (distance <= 5) points = 4; // Perfect (within 5%)
+          else if (distance <= 10) points = 3; // Great (within 10%)
+          else if (distance <= 20) points = 2; // Good (within 20%)
+          else if (distance <= 30) points = 1; // Close (within 30%)
+          else points = 0; // Miss
+          
+          console.log('[ResultsScreen] Player:', player?.player_name, 'Position:', dial.dial_position, 'Target:', targetPosition, 'Distance:', distance, 'Points:', points);
           
           return {
             playerId: dial.player_id,
@@ -251,8 +268,11 @@ export default function ResultsScreen() {
           };
         }) || [];
 
-        // Sort by points (highest first)
-        guesses.sort((a, b) => b.points - a.points);
+        // Sort by points (highest first), then by distance (closest first)
+        guesses.sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          return a.distance - b.distance;
+        });
         
         setPlayerGuesses(guesses);
         setLoading(false);
@@ -275,7 +295,7 @@ export default function ResultsScreen() {
   const leftConcept = roundData.round.left_concept;
   const rightConcept = roundData.round.right_concept;
   const psychicHint = roundData.round.psychic_hint;
-  const targetPosition = roundData.round.target_position;
+  const targetPosition = roundData.round.target_position ?? 50; // Default to center if null
   const round = roundData.gameState.current_round;
 
   console.log(

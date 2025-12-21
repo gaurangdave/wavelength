@@ -109,7 +109,8 @@ export async function POST(request: NextRequest) {
 
     // Create the first round with random concepts
     const randomConcepts = CONCEPT_PAIRS[Math.floor(Math.random() * CONCEPT_PAIRS.length)];
-    const targetPosition = Math.random() * 100; // Random target between 0-100
+    // Target position is null initially - psychic will set it
+    const targetPosition = null;
 
     const round = await createRound(
       roomId,

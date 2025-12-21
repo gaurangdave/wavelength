@@ -158,6 +158,26 @@ export async function startGame(roomId: string) {
   return response.json();
 }
 
+// Set target position (psychic only)
+export async function setTargetPosition(
+  roomId: string,
+  roundNumber: number,
+  targetPosition: number
+) {
+  const response = await fetch('/api/game/set-target', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roomId, roundNumber, targetPosition })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to set target position');
+  }
+
+  return response.json();
+}
+
 // Generate a unique peer ID
 export function generatePeerId(): string {
   return `peer-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;

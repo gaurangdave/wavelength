@@ -9,6 +9,7 @@ import {
   PsychicHint
 } from "@/components/ui/GameComponents";
 import { createDialGradient } from "@/lib/theme";
+import * as api from "@/lib/api-client";
 
 // Extend Window interface for throttling
 declare global {
@@ -122,30 +123,38 @@ interface DialPositionIndicatorProps {
   isDragging: boolean;
   isLocked: boolean;
   isPsychic: boolean;
+  targetSet: boolean;
 }
 
-function DialPositionIndicator({ dialPosition, isDragging, isLocked, isPsychic }: DialPositionIndicatorProps) {
+function DialPositionIndicator({ dialPosition, isDragging, isLocked, isPsychic, targetSet }: DialPositionIndicatorProps) {
+  const getStatusText = () => {
+    if (isPsychic) {
+      if (isLocked) return "TARGET SET";
+      if (isDragging) return "⟷ SETTING TARGET ⟷";
+      return "SETTING TARGET";
+    } else {
+      if (!targetSet) return "WAITING";
+      if (isLocked) return "LOCKED GUESS";
+      if (isDragging) return "⟷ DRAGGING ⟷";
+      return "CURRENT GUESS";
+    }
+  };
+
   return (
     <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-20">
       <div className="text-center">
         <div
           className={`text-2xl font-bold tracking-wider mb-1 transition-all duration-200 ${
-            isDragging ? "text-pink-400 scale-110" : "text-fuchsia-500"
+            isDragging ? "text-pink-400 scale-110" : isPsychic ? "text-teal-400" : "text-fuchsia-500"
           }`}
         >
           {Math.round(dialPosition)}%
         </div>
         <div className="text-gray-400 text-sm uppercase tracking-wide mb-2">
-          {isLocked
-            ? "LOCKED GUESS"
-            : isDragging
-            ? "⟷ DRAGGING ⟷"
-            : isPsychic
-            ? "WATCHING"
-            : "CURRENT GUESS"}
+          {getStatusText()}
         </div>
 
-        {!isLocked && !isPsychic && (
+        {!isLocked && ((isPsychic && !targetSet) || (!isPsychic && targetSet)) && (
           <div className="text-xs text-teal-400 mt-2 uppercase tracking-wide">
             Click and drag to adjust
           </div>
@@ -156,17 +165,29 @@ function DialPositionIndicator({ dialPosition, isDragging, isLocked, isPsychic }
 }
 
 export default function ActiveGameScreen() {
-  const { gameData, roundData, playerName, setCurrentScreen } = useGameStore();
+  const { gameData, roundData, playerName, setCurrentScreen, updateTargetPosition } = useGameStore();
 
   const [dialPosition, setDialPosition] = useState(50); // Current needle position - now dynamic
   const [isDragging, setIsDragging] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [targetSet, setTargetSet] = useState(false); // Track if psychic has set target
   const [glitchEffect, setGlitchEffect] = useState(false);
   const [otherPlayerDials, setOtherPlayerDials] = useState<OtherPlayerDial[]>(
     []
   );
   const [totalPlayers, setTotalPlayers] = useState(0);
   const [allPlayersLocked, setAllPlayersLocked] = useState(false);
+
+  // Initialize targetSet and dialPosition from roundData when target_position exists
+  useEffect(() => {
+    if (roundData?.round.target_position !== null && roundData?.round.target_position !== undefined) {
+      setTargetSet(true);
+      // For psychic, set dialPosition to the target they set
+      if (gameData?.playerId === roundData?.gameState.current_psychic_id) {
+        setDialPosition(roundData.round.target_position);
+      }
+    }
+  }, [roundData?.round.target_position, gameData?.playerId, roundData?.gameState.current_psychic_id]);
 
   // Extract values with fallbacks for hook dependencies
   const roomId = gameData?.roomId || "";
@@ -223,7 +244,8 @@ export default function ActiveGameScreen() {
 
   const handleMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (isLocked || isPsychic) return;
+      // Psychic can drag before target is set, non-psychic can drag after target is set
+      if (isLocked || (isPsychic && targetSet) || (!isPsychic && !targetSet)) return;
       event.preventDefault();
 
       setIsDragging(true);
@@ -235,12 +257,13 @@ export default function ActiveGameScreen() {
       );
       setDialPosition(newPosition);
     },
-    [isLocked, isPsychic, calculateAngleFromPointer]
+    [isLocked, isPsychic, targetSet, calculateAngleFromPointer]
   );
 
   const handleTouchStart = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
-      if (isLocked || isPsychic) return;
+      // Psychic can drag before target is set, non-psychic can drag after target is set
+      if (isLocked || (isPsychic && targetSet) || (!isPsychic && !targetSet)) return;
       event.preventDefault();
 
       const touch = event.touches[0];
@@ -253,12 +276,14 @@ export default function ActiveGameScreen() {
       );
       setDialPosition(newPosition);
     },
-    [isLocked, isPsychic, calculateAngleFromPointer]
+    [isLocked, isPsychic, targetSet, calculateAngleFromPointer]
   );
 
   const handleMouseMove = useCallback(
     (event: MouseEvent) => {
-      if (!isDragging || isLocked || isPsychic) return;
+      if (!isDragging || isLocked) return;
+      // Psychic can drag before target is set, non-psychic can drag after target is set
+      if ((isPsychic && targetSet) || (!isPsychic && !targetSet)) return;
 
       const dialElement = document.querySelector(
         "#dial-container"
@@ -272,12 +297,14 @@ export default function ActiveGameScreen() {
         setDialPosition(newPosition);
       }
     },
-    [isDragging, isLocked, isPsychic, calculateAngleFromPointer]
+    [isDragging, isLocked, isPsychic, targetSet, calculateAngleFromPointer]
   );
 
   const handleTouchMove = useCallback(
     (event: TouchEvent) => {
-      if (!isDragging || isLocked || isPsychic) return;
+      if (!isDragging || isLocked) return;
+      // Psychic can drag before target is set, non-psychic can drag after target is set
+      if ((isPsychic && targetSet) || (!isPsychic && !targetSet)) return;
       event.preventDefault();
 
       const touch = event.touches[0];
@@ -293,7 +320,7 @@ export default function ActiveGameScreen() {
         setDialPosition(newPosition);
       }
     },
-    [isDragging, isLocked, isPsychic, calculateAngleFromPointer]
+    [isDragging, isLocked, isPsychic, targetSet, calculateAngleFromPointer]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -390,11 +417,11 @@ export default function ActiveGameScreen() {
       );
       setAllPlayersLocked(true);
 
-      // Navigate to results screen after a short delay
+      // Navigate to results screen after a short delay for all players including psychic
       setTimeout(() => {
         console.log("[ActiveGame] Transitioning to results screen");
         setCurrentScreen("results");
-      }, 1500);
+      }, 2000); // Increased delay to 2s so players can see the gradient reveal
     }
   }, [
     otherPlayerDials,
@@ -413,6 +440,36 @@ export default function ActiveGameScreen() {
     }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // Monitor target position changes (for non-psychic players waiting)
+  useEffect(() => {
+    if (!roomId || !round || isPsychic) return;
+    
+    const checkTargetSet = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('rounds')
+          .select('target_position')
+          .eq('room_id', roomId)
+          .eq('round_number', round)
+          .single();
+        
+        if (error) throw error;
+        
+        if (data.target_position !== null && data.target_position !== undefined) {
+          setTargetSet(true);
+          // Update the store with the target position
+          updateTargetPosition(data.target_position);
+        }
+      } catch (err) {
+        console.error('Failed to check target position:', err);
+      }
+    };
+    
+    checkTargetSet();
+    const interval = setInterval(checkTargetSet, 2000);
+    return () => clearInterval(interval);
+  }, [roomId, round, isPsychic, updateTargetPosition]);
 
   // Helper function to update dial position in database
   const updateDialPosition = async (position: number, locked: boolean) => {
@@ -448,11 +505,47 @@ export default function ActiveGameScreen() {
     }
   };
 
+  const handleSetTarget = async () => {
+    if (!isPsychic || !roomId || !round) return;
+    
+    setIsLocked(true);
+    
+    try {
+      console.log(`[PSYCHIC] Setting target position at ${dialPosition}%`);
+      await api.setTargetPosition(roomId, round, dialPosition);
+      
+      // Update the store with the new target position
+      updateTargetPosition(dialPosition);
+      
+      setTargetSet(true);
+      console.log(`[PSYCHIC] Target position set successfully`);
+    } catch (err) {
+      console.error("Failed to set target position:", err);
+      setIsLocked(false);
+    }
+  };
+
   // Calculate needle angle (-90 to 90 degrees for semicircle)
   const needleAngle = -90 + (dialPosition / 100) * 180;
 
   // Early return after all hooks
-  if (!gameData || !roundData) return null;
+  if (!gameData) return null;
+
+  // Show loading state while waiting for round data
+  if (!roundData) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-teal-400 mb-4">
+            WAITING FOR PSYCHIC TO START THE ROUND...
+          </div>
+          <div className="text-gray-400">
+            Loading game state...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Extract display values
   const roomName = gameData.gameSettings.roomName;
@@ -511,17 +604,26 @@ export default function ActiveGameScreen() {
                   : "cursor-grab"
                 : "cursor-not-allowed"
             }`}
-            onMouseDown={isPsychic ? undefined : handleMouseDown}
-            onTouchStart={isPsychic ? undefined : handleTouchStart}
+            onMouseDown={isPsychic ? (targetSet ? undefined : handleMouseDown) : (targetSet ? handleMouseDown : undefined)}
+            onTouchStart={isPsychic ? (targetSet ? undefined : handleTouchStart) : (targetSet ? handleTouchStart : undefined)}
             style={{ touchAction: "none" }}
           >
-            {/* Semicircle Board - Gradient for psychic, plain for others */}
+            {/* Semicircle Board - Show gradient only to psychic before target set, hide from non-psychic until revealed */}
             <div
               className="absolute w-full h-full rounded-t-full overflow-hidden shadow-2xl"
               style={{
-                background: isPsychic
-                  ? createDialGradient(targetPos)
-                  : "rgb(63, 63, 70)",
+                background: (() => {
+                  // Psychic always sees gradient based on their current dial position (before and after setting)
+                  if (isPsychic) {
+                    return createDialGradient(dialPosition);
+                  }
+                  // Non-psychic players see gradient only after round is revealed (all locked in)
+                  if (!isPsychic && allPlayersLocked && targetPos !== null) {
+                    return createDialGradient(targetPos);
+                  }
+                  // Default gray (non-psychic players during guessing, or waiting)
+                  return "rgb(63, 63, 70)";
+                })(),
                 boxShadow:
                   "inset 0 5px 15px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5)",
               }}
@@ -617,6 +719,7 @@ export default function ActiveGameScreen() {
             isDragging={isDragging}
             isLocked={isLocked}
             isPsychic={isPsychic}
+            targetSet={targetSet}
           />
         </div>
       </div>
@@ -624,28 +727,55 @@ export default function ActiveGameScreen() {
       {/* Action Area */}
       <div className="px-6 py-8">
         <div className="max-w-2xl mx-auto">
-          <button
-            onClick={handleLockIn}
-            disabled={isLocked || isPsychic}
-            className={`
-              w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest
-              transition-all duration-300 border-2 relative overflow-hidden
-              ${
-                isLocked || isPsychic
-                  ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 border-fuchsia-500 text-white hover:from-fuchsia-500 hover:to-fuchsia-600 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer"
-              }
-            `}
-          >
-            {isPsychic
-              ? "PSYCHIC - WAITING FOR PLAYERS"
-              : isLocked
-              ? "GUESS LOCKED IN"
-              : "LOCK IN GUESS"}
-            {!isLocked && !isPsychic && (
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
-            )}
-          </button>
+          {isPsychic ? (
+            // Psychic button - set target position
+            <button
+              onClick={handleSetTarget}
+              disabled={isLocked}
+              className={`
+                w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest
+                transition-all duration-300 border-2 relative overflow-hidden
+                ${
+                  isLocked
+                    ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-teal-600 to-teal-700 border-teal-500 text-white hover:from-teal-500 hover:to-teal-600 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] cursor-pointer"
+                }
+              `}
+            >
+              {isLocked ? "TARGET SET - WAITING FOR PLAYERS" : "SET TARGET POSITION"}
+              {!isLocked && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
+              )}
+            </button>
+          ) : !targetSet ? (
+            // Non-psychic waiting for target
+            <button
+              disabled
+              className="w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest transition-all duration-300 border-2 relative overflow-hidden bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+            >
+              WAITING FOR PSYCHIC TO SET TARGET...
+            </button>
+          ) : (
+            // Non-psychic guessing
+            <button
+              onClick={handleLockIn}
+              disabled={isLocked}
+              className={`
+                w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest
+                transition-all duration-300 border-2 relative overflow-hidden
+                ${
+                  isLocked
+                    ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 border-fuchsia-500 text-white hover:from-fuchsia-500 hover:to-fuchsia-600 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer"
+                }
+              `}
+            >
+              {isLocked ? "GUESS LOCKED IN" : "LOCK IN GUESS"}
+              {!isLocked && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
