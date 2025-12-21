@@ -102,8 +102,8 @@ export default function ActiveGameScreen({
                   d.playerId === update.player_id
                     ? { 
                         playerId: update.player_id,
-                        playerName: update.player_name || d.playerName,
-                        position: update.position,
+                        playerName: d.playerName, // Keep existing name
+                        position: update.dial_position,
                         isLocked: update.is_locked
                       }
                     : d
@@ -111,8 +111,8 @@ export default function ActiveGameScreen({
               } else {
                 return [...prev, {
                   playerId: update.player_id,
-                  playerName: update.player_name || 'Player',
-                  position: update.position,
+                  playerName: 'Player', // Default name
+                  position: update.dial_position,
                   isLocked: update.is_locked
                 }];
               }
@@ -264,8 +264,7 @@ export default function ActiveGameScreen({
           room_id: roomId,
           round_number: round,
           player_id: playerId,
-          player_name: playerName,
-          position: position,
+          dial_position: position,
           is_locked: locked
         }, {
           onConflict: 'room_id,round_number,player_id'
