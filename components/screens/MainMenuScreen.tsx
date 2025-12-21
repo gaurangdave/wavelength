@@ -4,18 +4,10 @@ import { useState } from 'react';
 import { useGameStore } from '@/lib/store';
 
 export default function MainMenuScreen() {
-  const { playerName, setCurrentScreen } = useGameStore();
+  const playerName = useGameStore(state => state.playerName);
+  const goToCreateRoom = useGameStore(state => state.goToCreateRoom);
+  const goToJoinRoom = useGameStore(state => state.goToJoinRoom);
   const [hoveredCard, setHoveredCard] = useState<'create' | 'join' | null>(null);
-
-  const handleCreateRoom = () => {
-    setCurrentScreen('create-room');
-    console.log(`${playerName} chose to create a room`);
-  };
-
-  const handleJoinRoom = () => {
-    setCurrentScreen('join-room');
-    console.log(`${playerName} chose to join a room`);
-  };
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center relative overflow-hidden px-4">
@@ -48,7 +40,7 @@ export default function MainMenuScreen() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Create Room Card */}
           <div
-            onClick={handleCreateRoom}
+            onClick={goToCreateRoom}
             onMouseEnter={() => setHoveredCard('create')}
             onMouseLeave={() => setHoveredCard(null)}
             className={`
@@ -98,7 +90,7 @@ export default function MainMenuScreen() {
 
           {/* Join Room Card */}
           <div
-            onClick={handleJoinRoom}
+            onClick={goToJoinRoom}
             onMouseEnter={() => setHoveredCard('join')}
             onMouseLeave={() => setHoveredCard(null)}
             className={`

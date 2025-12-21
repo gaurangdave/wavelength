@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { createGame, generateRoomCode, generatePeerId } from '@/lib/api-client';
 import { useGameStore, type GameSettings } from '@/lib/store';
 
 export default function CreateRoomForm() {
-  const { playerName, createGame: createGameAction, backToMenu } = useGameStore();
+  const playerName = useGameStore(state => state.playerName);
+  const createGame = useGameStore(state => state.createGame);
+  const backToMenu = useGameStore(state => state.backToMenu);
+  const isLoading = useGameStore(state => state.isLoading);
+  const error = useGameStore(state => state.error);
+  
   const [gameSettings, setGameSettings] = useState<GameSettings>({
     roomName: '',
     numberOfLives: 3,
@@ -38,44 +42,21 @@ export default function CreateRoomForm() {
     });
   };
 
-  const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (gameSettings.roomName.trim() && !isCreating) {
-      setIsCreating(true);
-      setError(null);
-      
+    if (gameSettings.roomName.trim() && !isLoading) {
       try {
-        const roomCode = generateRoomCode();
-        const peerId = generatePeerId();
-        
-        const result = await createGame({
+        await createGame({
           roomName: gameSettings.roomName,
-          roomCode,
           playerName,
-          peerId,
           settings: {
             numberOfLives: gameSettings.numberOfLives,
             numberOfRounds: gameSettings.numberOfRounds,
             maxPoints: gameSettings.maxPoints
           }
         });
-        
-        createGameAction({
-          roomId: result.room.id,
-          roomCode: result.room.room_code,
-          playerId: result.player.id,
-          peerId: result.player.peer_id,
-          gameSettings
-        });
-        console.log(`${playerName} created game "${gameSettings.roomName}" with code ${result.room.room_code}`);
       } catch (err) {
-        console.error('Failed to create game:', err);
-        setError('Failed to create game. Please try again.');
-      } finally {
-        setIsCreating(false);
+        // Error is handled in the store
       }
     }
   };
@@ -239,17 +220,17 @@ export default function CreateRoomForm() {
             <div className="space-y-4 pt-6">
               <button
                 type="submit"
-                disabled={!isFormValid || isCreating}
+                disabled={!isFormValid || isLoading}
                 className={`
                   w-full py-4 px-8 text-xl font-bold text-white uppercase tracking-widest
                   transition-all duration-300 border-2 border-fuchsia-600
-                  ${isFormValid && !isCreating
+                  ${isFormValid && !isLoading
                     ? 'bg-fuchsia-600 hover:bg-fuchsia-700 hover:shadow-[0_0_30px_rgba(236,72,153,0.5)] cursor-pointer'
                     : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
                   }
                 `}
               >
-                {isCreating ? 'CREATING...' : 'INITIALIZE GAME'}
+                {isLoading ? 'CREATING...' : 'INITIALIZE GAME'}
               </button>
               
               <button

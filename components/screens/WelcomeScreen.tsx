@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useGameStore } from '@/lib/store';
 
 export default function WelcomeScreen() {
-  const { setPlayerName, setCurrentScreen } = useGameStore();
+  const setPlayerName = useGameStore(state => state.setPlayerName);
   const [playerNameInput, setPlayerNameInput] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
@@ -12,8 +12,6 @@ export default function WelcomeScreen() {
     e.preventDefault();
     if (playerNameInput.trim()) {
       setPlayerName(playerNameInput.trim());
-      setCurrentScreen('main-menu');
-      console.log(`Player ${playerNameInput.trim()} is ready to choose their path!`);
     }
   };
 

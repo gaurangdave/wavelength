@@ -47,6 +47,8 @@ export default function ActiveGameScreen() {
   const psychicHint = roundData.round.psychic_hint;
   const targetPosition = roundData.round.target_position;
   
+  console.log('[ActiveGame] Component render - playerId:', gameData.playerId, 'psychicId:', roundData.gameState.current_psychic_id, 'isPsychic:', isPsychic);
+  
   const targetWidth = 10; // 10% wide
   
   const [dialPosition, setDialPosition] = useState(50); // Current needle position - now dynamic
@@ -218,7 +220,7 @@ export default function ActiveGameScreen() {
   };
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (isLocked) return;
+    if (isLocked || isPsychic) return;
     event.preventDefault();
     
     setIsDragging(true);
@@ -228,7 +230,7 @@ export default function ActiveGameScreen() {
   };
 
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (isLocked) return;
+    if (isLocked || isPsychic) return;
     event.preventDefault();
     
     const touch = event.touches[0];
@@ -239,7 +241,7 @@ export default function ActiveGameScreen() {
   };
 
   const handleMouseMove = (event: MouseEvent) => {
-    if (!isDragging || isLocked) return;
+    if (!isDragging || isLocked || isPsychic) return;
     
     const dialElement = document.querySelector('#dial-container') as HTMLElement;
     if (dialElement) {
@@ -249,7 +251,7 @@ export default function ActiveGameScreen() {
   };
 
   const handleTouchMove = (event: TouchEvent) => {
-    if (!isDragging || isLocked) return;
+    if (!isDragging || isLocked || isPsychic) return;
     event.preventDefault();
     
     const touch = event.touches[0];
@@ -384,6 +386,8 @@ export default function ActiveGameScreen() {
   const createDialGradient = () => {
     const targetAngle = targetPos * 1.8 - 90; // Convert percentage to degrees
     
+    console.log('[ActiveGame] Creating gradient - isPsychic:', isPsychic, 'targetPos:', targetPos, 'targetAngle:', targetAngle);
+    
     return `conic-gradient(
       from -90deg at 50% 100%,
       rgb(63, 63, 70) 0deg ${targetAngle - 22.5 + 90}deg,
@@ -474,7 +478,7 @@ export default function ActiveGameScreen() {
           {/* Dial Container */}
           <div 
             id="dial-container"
-            className={`relative w-full max-w-[500px] h-[250px] mx-auto select-none ${!isLocked && !isPsychic ? 'cursor-pointer' : 'cursor-not-allowed'} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+            className={`relative w-full max-w-[500px] h-[250px] mx-auto select-none ${!isLocked && !isPsychic ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-not-allowed'}`}
             onMouseDown={isPsychic ? undefined : handleMouseDown}
             onTouchStart={isPsychic ? undefined : handleTouchStart}
             style={{ touchAction: 'none' }}
@@ -483,7 +487,11 @@ export default function ActiveGameScreen() {
             <div 
               className="absolute w-full h-full rounded-t-full overflow-hidden shadow-2xl"
               style={{
-                background: isPsychic ? createDialGradient() : 'rgb(63, 63, 70)',
+                background: (() => {
+                  const bg = isPsychic ? createDialGradient() : 'rgb(63, 63, 70)';
+                  console.log('[ActiveGame] Applying background - isPsychic:', isPsychic, 'background:', bg);
+                  return bg;
+                })(),
                 boxShadow: 'inset 0 5px 15px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5)'
               }}
             >

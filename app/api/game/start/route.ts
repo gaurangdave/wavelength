@@ -77,6 +77,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Delete any existing rounds and dial updates for this room (in case of restart)
+    const { supabase } = await import('@/lib/supabase');
+    await supabase
+      .from('dial_updates')
+      .delete()
+      .eq('room_id', roomId);
+    
+    await supabase
+      .from('rounds')
+      .delete()
+      .eq('room_id', roomId);
+
     // Start the game
     const gameState = await startGame(roomId, lives);
 
@@ -84,6 +96,16 @@ export async function POST(request: NextRequest) {
     if (psychicId) {
       await assignPsychic(roomId, psychicId);
     }
+    
+    // Re-fetch game state to get the updated psychic ID
+    const { supabase: supabaseClient } = await import('@/lib/supabase');
+    const { data: updatedGameState, error: gameStateError } = await supabaseClient
+      .from('game_state')
+      .select('*')
+      .eq('room_id', roomId)
+      .single();
+    
+    if (gameStateError) throw gameStateError;
 
     // Create the first round with random concepts
     const randomConcepts = CONCEPT_PAIRS[Math.floor(Math.random() * CONCEPT_PAIRS.length)];
@@ -99,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      gameState,
+      gameState: updatedGameState,
       round
     });
   } catch (error: any) {

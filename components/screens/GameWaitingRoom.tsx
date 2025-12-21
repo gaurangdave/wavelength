@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getPlayers, assignRandomPsychic, startGame } from '@/lib/api-client';
+import { useState, useEffect, useMemo } from 'react';
+import { getPlayers } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/lib/store';
 
@@ -14,28 +14,43 @@ interface Player {
   isPsychic: boolean;
 }
 
+interface FetchedPlayer {
+  id: string;
+  player_name: string;
+  is_host: boolean;
+  is_connected: boolean;
+  is_psychic: boolean;
+}
+
 export default function GameWaitingRoom() {
   const { 
-    gameData, 
-    playerName, 
-    isHost, 
-    startGame: startGameAction, 
-    backToMenu,
-    setCurrentScreen 
+    gameData,
+    isHost,
+    isLoading,
+    assignRandomPsychic,
+    startGame,
+    backToMenu
   } = useGameStore();
-  
-  if (!gameData) return null;
-  
-  const { roomId, roomCode, playerId, peerId } = gameData;
-  const roomName = gameData.gameSettings.roomName;
   
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPsychic, setSelectedPsychic] = useState<string | null>(null);
-  const [isGameReady, setIsGameReady] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
+  
+  // Calculate game ready state from players and psychic
+  const isGameReady = useMemo(() => 
+    players.length >= 2 && selectedPsychic !== null,
+    [players.length, selectedPsychic]
+  );
+  
+  // Get data from gameData (with null checks)
+  const roomId = gameData?.roomId;
+  const roomCode = gameData?.roomCode;
+  const playerId = gameData?.playerId;
+  const roomName = gameData?.gameSettings?.roomName;
 
   // Subscribe to game room status changes (Realtime)
   useEffect(() => {
+    if (!roomId) return;
+    
     console.log('GameWaitingRoom mounted - isHost:', isHost, 'roomId:', roomId);
     
     if (isHost) {
@@ -61,9 +76,8 @@ export default function GameWaitingRoom() {
         
         console.log('[NON-HOST] Current room status:', data?.status);
         
-        if (data?.status === 'in_progress' && !isStarting) {
+        if (data?.status === 'in_progress' && !isLoading) {
           console.log('[NON-HOST] ✅ Game already started! Fetching game state...');
-          setIsStarting(true);
           
           const response = await fetch(`/api/game/state?roomId=${roomId}`);
           if (response.ok) {
@@ -71,10 +85,7 @@ export default function GameWaitingRoom() {
             console.log('[NON-HOST] Fetched game state:', gameData);
             
             if (gameData.currentRound && gameData.gameState) {
-              startGameAction({
-                round: gameData.currentRound,
-                gameState: gameData.gameState
-              });
+              startGame();
             }
           }
         }
@@ -104,9 +115,8 @@ export default function GameWaitingRoom() {
           console.log('[NON-HOST] Old status:', payload.old?.status, '→ New status:', payload.new?.status);
           
           // Check if game has started
-          if (payload.new?.status === 'in_progress' && !isStarting) {
+          if (payload.new?.status === 'in_progress' && !isLoading) {
             console.log('[NON-HOST] ✅ Game started detected via Realtime! Fetching game state...');
-            setIsStarting(true);
             
             try {
               const response = await fetch(`/api/game/state?roomId=${roomId}`);
@@ -121,10 +131,7 @@ export default function GameWaitingRoom() {
                     round: data.currentRound,
                     gameState: data.gameState
                   });
-                  startGameAction({
-                    round: data.currentRound,
-                    gameState: data.gameState
-                  });
+                  startGame();
                 } else {
                   console.error('[NON-HOST] ❌ Missing currentRound or gameState in response');
                 }
@@ -134,12 +141,11 @@ export default function GameWaitingRoom() {
               }
             } catch (err) {
               console.error('[NON-HOST] ❌ Failed to fetch game state:', err);
-              setIsStarting(false);
             }
           } else {
             console.log('[NON-HOST] Status change but not starting game:', {
               newStatus: payload.new?.status,
-              isStarting
+              isLoading
             });
           }
         }
@@ -158,14 +164,16 @@ export default function GameWaitingRoom() {
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [roomId, isHost, startGameAction]);
+  }, [roomId, isHost, startGame, isLoading]);
 
   // Fetch players from database
   useEffect(() => {
+    if (!roomId || !playerId) return;
+    
     const fetchPlayers = async () => {
       try {
-        const fetchedPlayers = await getPlayers(roomId);
-        setPlayers(fetchedPlayers.map(p => ({
+        const fetchedPlayers = await getPlayers(roomId) as FetchedPlayer[];
+        setPlayers(fetchedPlayers.map((p) => ({
           id: p.id,
           name: p.player_name,
           isHost: p.is_host,
@@ -175,7 +183,7 @@ export default function GameWaitingRoom() {
         })));
         
         // Check if psychic is already assigned
-        const psychic = fetchedPlayers.find(p => p.is_psychic);
+        const psychic = fetchedPlayers.find((p) => p.is_psychic);
         if (psychic) {
           setSelectedPsychic(psychic.id);
         }
@@ -190,41 +198,27 @@ export default function GameWaitingRoom() {
     return () => clearInterval(interval);
   }, [roomId, playerId]);
 
-  // Check if game is ready
-  useEffect(() => {
-    setIsGameReady(players.length >= 2 && selectedPsychic !== null);
-  }, [players.length, selectedPsychic]);
-
   const handleAssignPsychic = async () => {
-    try {
-      const result = await assignRandomPsychic(roomId);
+    const result = await assignRandomPsychic();
+    if (result) {
       setSelectedPsychic(result.psychicId);
       // Update local players list
       setPlayers(prev => prev.map(p => ({
         ...p,
         isPsychic: p.id === result.psychicId
       })));
-    } catch (err) {
-      console.error('Failed to assign psychic:', err);
     }
   };
 
   const handleStartGame = async () => {
-    if (isGameReady && selectedPsychic && !isStarting) {
-      setIsStarting(true);
-      try {
-        console.log('[HOST] Starting game...');
-        const result = await startGame(roomId);
-        console.log('[HOST] Game started successfully, transitioning to game screen');
-        
-        // Room status is updated in the API, Realtime will notify non-host players
-        startGameAction(result);
-      } catch (err) {
-        console.error('[HOST] Failed to start game:', err);
-        setIsStarting(false);
-      }
+    if (isGameReady && selectedPsychic && !isLoading) {
+      console.log('[HOST] Starting game...');
+      await startGame();
     }
   };
+  
+  // Early return if no game data
+  if (!gameData) return null;
 
   return (
     <div className="min-h-screen bg-zinc-950 relative overflow-hidden">
@@ -351,11 +345,11 @@ export default function GameWaitingRoom() {
           {/* Start Game Button */}
           <button
             onClick={handleStartGame}
-            disabled={!isHost || !isGameReady || isStarting}
+            disabled={!isHost || !isGameReady || isLoading}
             className={`
               w-full py-6 px-8 text-2xl font-bold uppercase tracking-widest
               transition-all duration-300 border-2
-              ${(isHost && isGameReady && !isStarting)
+              ${(isHost && isGameReady && !isLoading)
                 ? 'bg-fuchsia-600 border-fuchsia-600 text-white hover:bg-fuchsia-700 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer'
                 : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed opacity-50'
               }
@@ -363,7 +357,7 @@ export default function GameWaitingRoom() {
           >
             {!isHost
               ? 'WAITING FOR HOST TO START...'
-              : isStarting 
+              : isLoading 
               ? 'STARTING...'
               : !isGameReady 
               ? `WAITING FOR PLAYERS (${players.length}/2)` 

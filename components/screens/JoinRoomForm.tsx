@@ -1,57 +1,46 @@
 'use client';
 
 import { useState } from 'react';
-import { joinGame, generatePeerId } from '@/lib/api-client';
 import { useGameStore } from '@/lib/store';
 
 export default function JoinRoomForm() {
-  const { playerName, joinGame: joinGameAction, backToMenu } = useGameStore();
+  const playerName = useGameStore(state => state.playerName);
+  const joinGame = useGameStore(state => state.joinGame);
+  const backToMenu = useGameStore(state => state.backToMenu);
+  const isLoading = useGameStore(state => state.isLoading);
+  const storeError = useGameStore(state => state.error);
+  
   const [roomCode, setRoomCode] = useState<string>('');
-  const [isJoining, setIsJoining] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<boolean>(false);
+  
+  const error = storeError || localError;
 
   const handleInputChange = (value: string) => {
     // Convert to uppercase and limit to 6 characters
     const cleanValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     setRoomCode(cleanValue);
-    if (error) setError(null);
+    if (error) setLocalError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (roomCode.length !== 6) {
-      setError('Room code must be 6 characters');
+      setLocalError('Room code must be 6 characters');
       return;
     }
 
-    if (!isJoining) {
-      setIsJoining(true);
-      setError(null);
+    if (!isLoading) {
+      setLocalError(null);
       
       try {
-        const peerId = generatePeerId();
-        
-        const result = await joinGame({
+        await joinGame({
           roomCode,
-          playerName,
-          peerId
+          playerName
         });
-        
-        joinGameAction({
-          roomId: result.room.id,
-          roomCode: result.room.room_code,
-          playerId: result.player.id,
-          peerId: result.player.peer_id,
-          gameSettings: result.room.settings
-        });
-        console.log(`${playerName} joined game with code ${result.room.room_code}`);
-      } catch (err: any) {
-        console.error('Failed to join game:', err);
-        setError(err.message || 'Failed to join game. Please check the room code.');
-      } finally {
-        setIsJoining(false);
+      } catch (err) {
+        // Error is handled in the store
       }
     }
   };
@@ -157,23 +146,23 @@ export default function JoinRoomForm() {
             <div className="space-y-4 pt-6">
               <button
                 type="submit"
-                disabled={!isFormValid || isJoining}
+                disabled={!isFormValid || isLoading}
                 className={`
                   w-full py-4 px-8 text-xl font-bold text-white uppercase tracking-widest
                   transition-all duration-300 border-2 border-teal-600
-                  ${isFormValid && !isJoining
+                  ${isFormValid && !isLoading
                     ? 'bg-teal-600 hover:bg-teal-700 hover:shadow-[0_0_30px_rgba(20,184,166,0.5)] cursor-pointer'
                     : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
                   }
                 `}
               >
-                {isJoining ? 'JOINING...' : 'JOIN GAME'}
+                {isLoading ? 'JOINING...' : 'JOIN GAME'}
               </button>
               
               <button
                 type="button"
                 onClick={backToMenu}
-                disabled={isJoining}
+                disabled={isLoading}
                 className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ← BACK TO MENU
@@ -182,7 +171,7 @@ export default function JoinRoomForm() {
           </form>
 
           {/* Status Indicator */}
-          {isFormValid && !isJoining && (
+          {isFormValid && !isLoading && (
             <div className="text-center mt-6">
               <div className="flex items-center justify-center space-x-2 text-teal-400 text-sm font-medium tracking-wide uppercase">
                 <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
@@ -191,7 +180,7 @@ export default function JoinRoomForm() {
             </div>
           )}
 
-          {isJoining && (
+          {isLoading && (
             <div className="text-center mt-6">
               <div className="flex items-center justify-center space-x-2 text-yellow-400 text-sm font-medium tracking-wide uppercase">
                 <div className="w-2 h-2 bg-yellow-400 rounded-full animate-ping"></div>
