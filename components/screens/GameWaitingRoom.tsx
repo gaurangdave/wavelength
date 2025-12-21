@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWavelengthP2P } from '@/lib/hooks/useWavelengthP2P';
 import { getPlayers, assignRandomPsychic, startGame } from '@/lib/api-client';
+import { supabase } from '@/lib/supabase';
 
 interface Player {
   id: string;
@@ -41,43 +41,131 @@ export default function GameWaitingRoom({
   const [isGameReady, setIsGameReady] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
 
-  // Initialize P2P connection
-  const p2p = useWavelengthP2P({
-    peerId,
-    onGameStateSync: async (round, score, lives, psychicId) => {
-      console.log('Game state synced from host:', { round, score, lives, psychicId });
-      
-      // Non-host players: fetch round data and start game
-      if (!isHost && round === 1) {
-        try {
-          // Fetch the round data from the API
+  // Subscribe to game room status changes (Realtime)
+  useEffect(() => {
+    console.log('GameWaitingRoom mounted - isHost:', isHost, 'roomId:', roomId);
+    
+    if (isHost) {
+      console.log('Host mode - skipping Realtime subscription');
+      return;
+    }
+
+    console.log('[NON-HOST] Setting up Supabase Realtime subscription for room status changes');
+    
+    // Also poll the room status as a backup
+    const checkRoomStatus = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('game_rooms')
+          .select('status')
+          .eq('id', roomId)
+          .single();
+        
+        if (error) {
+          console.error('[NON-HOST] Error checking room status:', error);
+          return;
+        }
+        
+        console.log('[NON-HOST] Current room status:', data?.status);
+        
+        if (data?.status === 'in_progress' && !isStarting) {
+          console.log('[NON-HOST] ✅ Game already started! Fetching game state...');
+          setIsStarting(true);
+          
           const response = await fetch(`/api/game/state?roomId=${roomId}`);
           if (response.ok) {
-            const data = await response.json();
-            if (data.currentRound) {
+            const gameData = await response.json();
+            console.log('[NON-HOST] Fetched game state:', gameData);
+            
+            if (gameData.currentRound && gameData.gameState) {
               onStartGame?.({
-                round: data.currentRound,
-                gameState: {
-                  current_round: round,
-                  team_score: score,
-                  lives_remaining: lives,
-                  current_psychic_id: psychicId
-                }
+                round: gameData.currentRound,
+                gameState: gameData.gameState
               });
             }
           }
-        } catch (err) {
-          console.error('Failed to fetch round data:', err);
         }
+      } catch (err) {
+        console.error('[NON-HOST] Error in status check:', err);
       }
-    }
-  });
+    };
+    
+    // Check immediately
+    checkRoomStatus();
+    
+    // Then check every 2 seconds as backup
+    const pollInterval = setInterval(checkRoomStatus, 2000);
+    
+    const channel = supabase
+      .channel(`game-room-${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'game_rooms',
+          filter: `id=eq.${roomId}`
+        },
+        async (payload) => {
+          console.log('[NON-HOST] Game room updated via Realtime:', payload);
+          console.log('[NON-HOST] Old status:', payload.old?.status, '→ New status:', payload.new?.status);
+          
+          // Check if game has started
+          if (payload.new?.status === 'in_progress' && !isStarting) {
+            console.log('[NON-HOST] ✅ Game started detected via Realtime! Fetching game state...');
+            setIsStarting(true);
+            
+            try {
+              const response = await fetch(`/api/game/state?roomId=${roomId}`);
+              console.log('[NON-HOST] API response status:', response.status);
+              
+              if (response.ok) {
+                const data = await response.json();
+                console.log('[NON-HOST] Fetched game state:', data);
+                
+                if (data.currentRound && data.gameState) {
+                  console.log('[NON-HOST] ✅ Transitioning to game screen with data:', {
+                    round: data.currentRound,
+                    gameState: data.gameState
+                  });
+                  onStartGame?.({
+                    round: data.currentRound,
+                    gameState: data.gameState
+                  });
+                } else {
+                  console.error('[NON-HOST] ❌ Missing currentRound or gameState in response');
+                }
+              } else {
+                const errorText = await response.text();
+                console.error('[NON-HOST] ❌ API response not ok:', errorText);
+              }
+            } catch (err) {
+              console.error('[NON-HOST] ❌ Failed to fetch game state:', err);
+              setIsStarting(false);
+            }
+          } else {
+            console.log('[NON-HOST] Status change but not starting game:', {
+              newStatus: payload.new?.status,
+              isStarting
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[NON-HOST] Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[NON-HOST] ✅ Successfully subscribed to room updates!');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[NON-HOST] ❌ Realtime subscription error!');
+        }
+      });
 
-  // Join P2P room
-  useEffect(() => {
-    p2p.joinRoom(roomId);
-    return () => p2p.leaveRoom();
-  }, [roomId]);
+    return () => {
+      console.log('[NON-HOST] Cleaning up - unsubscribing from game room changes');
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, isHost, onStartGame]);
 
   // Fetch players from database
   useEffect(() => {
@@ -132,19 +220,14 @@ export default function GameWaitingRoom({
     if (isGameReady && selectedPsychic && !isStarting) {
       setIsStarting(true);
       try {
+        console.log('[HOST] Starting game...');
         const result = await startGame(roomId);
+        console.log('[HOST] Game started successfully, transitioning to game screen');
         
-        // Broadcast game start via P2P
-        p2p.sendGameStateSync(
-          result.round.round_number,
-          result.gameState.team_score,
-          result.gameState.lives_remaining,
-          result.gameState.current_psychic_id
-        );
-        
+        // Room status is updated in the API, Realtime will notify non-host players
         onStartGame?.(result);
       } catch (err) {
-        console.error('Failed to start game:', err);
+        console.error('[HOST] Failed to start game:', err);
         setIsStarting(false);
       }
     }
@@ -241,7 +324,7 @@ export default function GameWaitingRoom({
           </div>
 
           <div className="text-center mt-6 text-gray-500 text-sm font-medium tracking-wide uppercase">
-            {players.length} Players Connected | {p2p.connectedPeers.length} P2P Connections
+            {players.length} Players Connected
           </div>
         </div>
 
@@ -275,17 +358,19 @@ export default function GameWaitingRoom({
           {/* Start Game Button */}
           <button
             onClick={handleStartGame}
-            disabled={!isGameReady || isStarting}
+            disabled={!isHost || !isGameReady || isStarting}
             className={`
               w-full py-6 px-8 text-2xl font-bold uppercase tracking-widest
               transition-all duration-300 border-2
-              ${(isGameReady && !isStarting)
+              ${(isHost && isGameReady && !isStarting)
                 ? 'bg-fuchsia-600 border-fuchsia-600 text-white hover:bg-fuchsia-700 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer'
                 : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed opacity-50'
               }
             `}
           >
-            {isStarting 
+            {!isHost
+              ? 'WAITING FOR HOST TO START...'
+              : isStarting 
               ? 'STARTING...'
               : !isGameReady 
               ? `WAITING FOR PLAYERS (${players.length}/2)` 
@@ -311,7 +396,7 @@ export default function GameWaitingRoom({
           {isGameReady && selectedPsychic ? (
             <div className="flex items-center justify-center space-x-2 text-teal-400 text-sm font-medium tracking-wide uppercase">
               <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
-              <span>READY TO COMMENCE | P2P: {p2p.connectionState}</span>
+              <span>READY TO COMMENCE</span>
             </div>
           ) : (
             <div className="text-gray-500 text-sm font-medium tracking-wide uppercase">

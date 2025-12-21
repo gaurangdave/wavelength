@@ -1,8 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWavelengthP2P } from '@/lib/hooks/useWavelengthP2P';
 import { lockDialPosition } from '@/lib/api-client';
+import { supabase } from '@/lib/supabase';
+
+// Extend Window interface for throttling
+declare global {
+  interface Window {
+    _lastDialUpdate?: number;
+  }
+}
 
 interface ActiveGameScreenProps {
   roomId: string;
@@ -15,6 +22,7 @@ interface ActiveGameScreenProps {
   playerId: string;
   playerName: string;
   peerId: string;
+  isPsychic?: boolean;
   leftConcept: string;
   rightConcept: string;
   psychicHint: string;
@@ -47,6 +55,7 @@ export default function ActiveGameScreen({
   playerId,
   playerName,
   peerId,
+  isPsychic = false,
   leftConcept,
   rightConcept,
   psychicHint,
@@ -62,31 +71,64 @@ export default function ActiveGameScreen({
   const [glitchEffect, setGlitchEffect] = useState(false);
   const [otherPlayerDials, setOtherPlayerDials] = useState<OtherPlayerDial[]>([]);
 
-  // Initialize P2P for dial synchronization
-  const p2p = useWavelengthP2P({
-    peerId,
-    onDialUpdate: (updatedPlayerId, updatedPlayerName, position, updatedIsLocked) => {
-      // Update other players' dial positions
-      setOtherPlayerDials(prev => {
-        const existing = prev.find(d => d.playerId === updatedPlayerId);
-        if (existing) {
-          return prev.map(d => 
-            d.playerId === updatedPlayerId 
-              ? { ...d, position, isLocked: updatedIsLocked }
-              : d
-          );
-        } else {
-          return [...prev, { playerId: updatedPlayerId, playerName: updatedPlayerName, position, isLocked: updatedIsLocked }];
-        }
-      });
-    }
-  });
-
-  // Join P2P room
+  // Subscribe to dial position updates via Realtime
   useEffect(() => {
-    p2p.joinRoom(roomId);
-    return () => p2p.leaveRoom();
-  }, [roomId]);
+    console.log('[ActiveGame] Setting up Realtime subscription for dial updates');
+    
+    const channel = supabase
+      .channel(`dial-updates-${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'dial_updates',
+          filter: `room_id=eq.${roomId}`
+        },
+        (payload) => {
+          console.log('[Realtime] Dial update received:', payload);
+          
+          // Ignore updates from yourself
+          if (payload.new?.player_id === playerId) {
+            return;
+          }
+          
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const update = payload.new;
+            setOtherPlayerDials(prev => {
+              const existing = prev.find(d => d.playerId === update.player_id);
+              if (existing) {
+                return prev.map(d => 
+                  d.playerId === update.player_id
+                    ? { 
+                        playerId: update.player_id,
+                        playerName: update.player_name || d.playerName,
+                        position: update.position,
+                        isLocked: update.is_locked
+                      }
+                    : d
+                );
+              } else {
+                return [...prev, {
+                  playerId: update.player_id,
+                  playerName: update.player_name || 'Player',
+                  position: update.position,
+                  isLocked: update.is_locked
+                }];
+              }
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[ActiveGame] Realtime subscription status:', status);
+      });
+
+    return () => {
+      console.log('[ActiveGame] Cleaning up dial updates subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, playerId]);
 
   // Scoring zones (like the original Wavelength game)
   const scoringZones = [
@@ -141,8 +183,11 @@ export default function ActiveGameScreen({
     if (dialElement) {
       const newPosition = calculateAngleFromPointer(event.clientX, event.clientY, dialElement);
       setDialPosition(newPosition);
-      // Broadcast dial position via P2P
-      p2p.sendDialUpdate(playerId, playerName, newPosition, false);
+      // Throttle updates to database (only update every 100ms)
+      if (!window._lastDialUpdate || Date.now() - window._lastDialUpdate > 100) {
+        window._lastDialUpdate = Date.now();
+        updateDialPosition(newPosition, false);
+      }
     }
   };
 
@@ -155,8 +200,11 @@ export default function ActiveGameScreen({
     if (dialElement) {
       const newPosition = calculateAngleFromPointer(touch.clientX, touch.clientY, dialElement);
       setDialPosition(newPosition);
-      // Broadcast dial position via P2P
-      p2p.sendDialUpdate(playerId, playerName, newPosition, false);
+      // Throttle updates to database (only update every 100ms)
+      if (!window._lastDialUpdate || Date.now() - window._lastDialUpdate > 100) {
+        window._lastDialUpdate = Date.now();
+        updateDialPosition(newPosition, false);
+      }
     }
   };
 
@@ -207,15 +255,35 @@ export default function ActiveGameScreen({
     return () => clearInterval(interval);
   }, []);
 
+  // Helper function to update dial position in database
+  const updateDialPosition = async (position: number, locked: boolean) => {
+    try {
+      await supabase
+        .from('dial_updates')
+        .upsert({
+          room_id: roomId,
+          round_number: round,
+          player_id: playerId,
+          player_name: playerName,
+          position: position,
+          is_locked: locked
+        }, {
+          onConflict: 'room_id,round_number,player_id'
+        });
+    } catch (err) {
+      console.error('Failed to update dial position:', err);
+    }
+  };
+
   const handleLockIn = async () => {
     setIsLocked(true);
     
     try {
-      // Save to database
+      // Save locked position to database (via API)
       await lockDialPosition(roomId, round, playerId, dialPosition);
       
-      // Broadcast locked position via P2P
-      p2p.sendDialUpdate(playerId, playerName, dialPosition, true);
+      // Update dial position with locked status
+      await updateDialPosition(dialPosition, true);
       
       onLockInGuess?.(dialPosition);
     } catch (err) {
@@ -331,7 +399,7 @@ export default function ActiveGameScreen({
             <div 
               className="absolute w-full h-full rounded-t-full overflow-hidden shadow-2xl"
               style={{
-                background: createDialGradient(),
+                background: isPsychic ? createDialGradient() : 'rgb(63, 63, 70)',
                 boxShadow: 'inset 0 5px 15px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5)'
               }}
             >
@@ -447,22 +515,24 @@ export default function ActiveGameScreen({
                 {isLocked ? 'LOCKED GUESS' : isDragging ? '⟷ DRAGGING ⟷' : 'CURRENT GUESS'}
               </div>
               
-              {/* Show what score zone the needle is in */}
-              <div className="text-xs text-zinc-300">
-                {(() => {
-                  const currentZone = scoringZones.find(zone => 
-                    dialPosition >= zone.start && dialPosition <= zone.start + zone.width
-                  );
-                  if (currentZone) {
-                    return (
-                      <span style={{ color: currentZone.color }} className="font-bold">
-                        {currentZone.label} ({currentZone.points} PTS)
-                      </span>
+              {/* Show what score zone the needle is in (psychic only) */}
+              {isPsychic && (
+                <div className="text-xs text-zinc-300">
+                  {(() => {
+                    const currentZone = scoringZones.find(zone => 
+                      dialPosition >= zone.start && dialPosition <= zone.start + zone.width
                     );
-                  }
-                  return <span className="text-zinc-500">NO SCORE</span>;
-                })()}
-              </div>
+                    if (currentZone) {
+                      return (
+                        <span style={{ color: currentZone.color }} className="font-bold">
+                          {currentZone.label} ({currentZone.points} PTS)
+                        </span>
+                      );
+                    }
+                    return <span className="text-zinc-500">NO SCORE</span>;
+                  })()}
+                </div>
+              )}
               
               {!isLocked && (
                 <div className="text-xs text-teal-400 mt-2 uppercase tracking-wide">

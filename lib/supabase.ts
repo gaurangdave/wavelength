@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // These are the default local development URLs for Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -350,15 +350,17 @@ export async function startGame(roomId: string, initialLives: number) {
     .update({ status: 'in_progress' })
     .eq('id', roomId)
 
-  // Create game state
+  // Create or update game state (upsert to handle restarts)
   const { data, error } = await supabase
     .from('game_state')
-    .insert({
+    .upsert({
       room_id: roomId,
       current_round: 1,
       team_score: 0,
       lives_remaining: initialLives,
       current_psychic_id: null
+    }, {
+      onConflict: 'room_id'
     })
     .select()
     .single()

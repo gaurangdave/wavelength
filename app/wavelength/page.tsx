@@ -153,6 +153,7 @@ export default function WavelengthGamePage() {
             playerId={gameData.playerId}
             playerName={playerName}
             peerId={gameData.peerId}
+            isPsychic={gameData.playerId === roundData.gameState.current_psychic_id}
             leftConcept={roundData.round.left_concept}
             rightConcept={roundData.round.right_concept}
             psychicHint={roundData.round.psychic_hint}
