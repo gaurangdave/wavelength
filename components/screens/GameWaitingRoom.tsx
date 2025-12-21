@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { getPlayers } from '@/lib/api-client';
-import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/lib/store';
+import { useGameRoomStatusUpdates } from '@/lib/hooks/useRealtimeSubscriptions';
 
 interface Player {
   id: string;
@@ -47,124 +47,8 @@ export default function GameWaitingRoom() {
   const playerId = gameData?.playerId;
   const roomName = gameData?.gameSettings?.roomName;
 
-  // Subscribe to game room status changes (Realtime)
-  useEffect(() => {
-    if (!roomId) return;
-    
-    console.log('GameWaitingRoom mounted - isHost:', isHost, 'roomId:', roomId);
-    
-    if (isHost) {
-      console.log('Host mode - skipping Realtime subscription');
-      return;
-    }
-
-    console.log('[NON-HOST] Setting up Supabase Realtime subscription for room status changes');
-    
-    // Also poll the room status as a backup
-    const checkRoomStatus = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('game_rooms')
-          .select('status')
-          .eq('id', roomId)
-          .single();
-        
-        if (error) {
-          console.error('[NON-HOST] Error checking room status:', error);
-          return;
-        }
-        
-        console.log('[NON-HOST] Current room status:', data?.status);
-        
-        if (data?.status === 'in_progress' && !isLoading) {
-          console.log('[NON-HOST] ✅ Game already started! Fetching game state...');
-          
-          const response = await fetch(`/api/game/state?roomId=${roomId}`);
-          if (response.ok) {
-            const gameData = await response.json();
-            console.log('[NON-HOST] Fetched game state:', gameData);
-            
-            if (gameData.currentRound && gameData.gameState) {
-              startGame();
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[NON-HOST] Error in status check:', err);
-      }
-    };
-    
-    // Check immediately
-    checkRoomStatus();
-    
-    // Then check every 2 seconds as backup
-    const pollInterval = setInterval(checkRoomStatus, 2000);
-    
-    const channel = supabase
-      .channel(`game-room-${roomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'game_rooms',
-          filter: `id=eq.${roomId}`
-        },
-        async (payload) => {
-          console.log('[NON-HOST] Game room updated via Realtime:', payload);
-          console.log('[NON-HOST] Old status:', payload.old?.status, '→ New status:', payload.new?.status);
-          
-          // Check if game has started
-          if (payload.new?.status === 'in_progress' && !isLoading) {
-            console.log('[NON-HOST] ✅ Game started detected via Realtime! Fetching game state...');
-            
-            try {
-              const response = await fetch(`/api/game/state?roomId=${roomId}`);
-              console.log('[NON-HOST] API response status:', response.status);
-              
-              if (response.ok) {
-                const data = await response.json();
-                console.log('[NON-HOST] Fetched game state:', data);
-                
-                if (data.currentRound && data.gameState) {
-                  console.log('[NON-HOST] ✅ Transitioning to game screen with data:', {
-                    round: data.currentRound,
-                    gameState: data.gameState
-                  });
-                  startGame();
-                } else {
-                  console.error('[NON-HOST] ❌ Missing currentRound or gameState in response');
-                }
-              } else {
-                const errorText = await response.text();
-                console.error('[NON-HOST] ❌ API response not ok:', errorText);
-              }
-            } catch (err) {
-              console.error('[NON-HOST] ❌ Failed to fetch game state:', err);
-            }
-          } else {
-            console.log('[NON-HOST] Status change but not starting game:', {
-              newStatus: payload.new?.status,
-              isLoading
-            });
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[NON-HOST] Realtime subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('[NON-HOST] ✅ Successfully subscribed to room updates!');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[NON-HOST] ❌ Realtime subscription error!');
-        }
-      });
-
-    return () => {
-      console.log('[NON-HOST] Cleaning up - unsubscribing from game room changes');
-      clearInterval(pollInterval);
-      supabase.removeChannel(channel);
-    };
-  }, [roomId, isHost, startGame, isLoading]);
+  // Subscribe to game room status changes via custom hook
+  useGameRoomStatusUpdates(roomId, isHost);
 
   // Fetch players from database
   useEffect(() => {
