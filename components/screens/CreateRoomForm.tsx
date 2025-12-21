@@ -2,21 +2,10 @@
 
 import { useState } from 'react';
 import { createGame, generateRoomCode, generatePeerId } from '@/lib/api-client';
+import { useGameStore, type GameSettings } from '@/lib/store';
 
-interface CreateRoomFormProps {
-  playerName: string;
-  onCreateGame?: (gameData: { roomId: string; roomCode: string; playerId: string; peerId: string; gameSettings: GameSettings }) => void;
-  onBack?: () => void;
-}
-
-interface GameSettings {
-  roomName: string;
-  numberOfLives: number;
-  numberOfRounds: number;
-  maxPoints: number;
-}
-
-export default function CreateRoomForm({ playerName, onCreateGame, onBack }: CreateRoomFormProps) {
+export default function CreateRoomForm() {
+  const { playerName, createGame: createGameAction, backToMenu } = useGameStore();
   const [gameSettings, setGameSettings] = useState<GameSettings>({
     roomName: '',
     numberOfLives: 3,
@@ -74,13 +63,14 @@ export default function CreateRoomForm({ playerName, onCreateGame, onBack }: Cre
           }
         });
         
-        onCreateGame?.({
+        createGameAction({
           roomId: result.room.id,
           roomCode: result.room.room_code,
           playerId: result.player.id,
           peerId: result.player.peer_id,
           gameSettings
         });
+        console.log(`${playerName} created game "${gameSettings.roomName}" with code ${result.room.room_code}`);
       } catch (err) {
         console.error('Failed to create game:', err);
         setError('Failed to create game. Please try again.');
@@ -262,15 +252,13 @@ export default function CreateRoomForm({ playerName, onCreateGame, onBack }: Cre
                 {isCreating ? 'CREATING...' : 'INITIALIZE GAME'}
               </button>
               
-              {onBack && (
-                <button
-                  type="button"
-                  onClick={onBack}
-                  className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
-                >
-                  ← BACK TO MENU
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={backToMenu}
+                className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
+              >
+                ← BACK TO MENU
+              </button>
             </div>
           </form>
 

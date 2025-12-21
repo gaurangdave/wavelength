@@ -1,19 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import { useGameStore } from '@/lib/store';
 
-interface WelcomeScreenProps {
-  onNext?: (playerName: string) => void;
-}
-
-export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
-  const [playerName, setPlayerName] = useState('');
+export default function WelcomeScreen() {
+  const { setPlayerName, setCurrentScreen } = useGameStore();
+  const [playerNameInput, setPlayerNameInput] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (playerName.trim()) {
-      onNext?.(playerName.trim());
+    if (playerNameInput.trim()) {
+      setPlayerName(playerNameInput.trim());
+      setCurrentScreen('main-menu');
+      console.log(`Player ${playerNameInput.trim()} is ready to choose their path!`);
     }
   };
 
@@ -44,8 +44,8 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
             <div className="relative">
               <input
                 type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
+                value={playerNameInput}
+                onChange={(e) => setPlayerNameInput(e.target.value)}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder="e.g., Player 456"
@@ -66,11 +66,11 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
 
             <button
               type="submit"
-              disabled={!playerName.trim()}
+              disabled={!playerNameInput.trim()}
               className={`
                 w-full py-4 px-8 text-xl font-bold text-white uppercase tracking-widest
                 transition-all duration-300 border-2 border-fuchsia-600
-                ${playerName.trim()
+                ${playerNameInput.trim()
                   ? 'bg-fuchsia-600 hover:bg-fuchsia-700 hover:shadow-[0_0_25px_rgba(236,72,153,0.4)] cursor-pointer' 
                   : 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
                 }
@@ -82,7 +82,7 @@ export default function WelcomeScreen({ onNext }: WelcomeScreenProps) {
 
           {/* Status Indicator */}
           <div className="text-teal-400 text-sm font-medium tracking-wide uppercase">
-            {playerName.length > 0 && (
+            {playerNameInput.length > 0 && (
               <div className="flex items-center justify-center space-x-2">
                 <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
                 <span>READY TO PROCEED</span>

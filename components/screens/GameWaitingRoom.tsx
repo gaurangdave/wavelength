@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getPlayers, assignRandomPsychic, startGame } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
+import { useGameStore } from '@/lib/store';
 
 interface Player {
   id: string;
@@ -13,29 +14,21 @@ interface Player {
   isPsychic: boolean;
 }
 
-interface GameWaitingRoomProps {
-  roomId: string;
-  roomName: string;
-  roomCode: string;
-  playerName: string;
-  playerId: string;
-  peerId: string;
-  isHost?: boolean;
-  onStartGame?: (roundData: any) => void;
-  onBack?: () => void;
-}
-
-export default function GameWaitingRoom({ 
-  roomId,
-  roomName, 
-  roomCode, 
-  playerName, 
-  playerId,
-  peerId,
-  isHost = true,
-  onStartGame,
-  onBack 
-}: GameWaitingRoomProps) {
+export default function GameWaitingRoom() {
+  const { 
+    gameData, 
+    playerName, 
+    isHost, 
+    startGame: startGameAction, 
+    backToMenu,
+    setCurrentScreen 
+  } = useGameStore();
+  
+  if (!gameData) return null;
+  
+  const { roomId, roomCode, playerId, peerId } = gameData;
+  const roomName = gameData.gameSettings.roomName;
+  
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPsychic, setSelectedPsychic] = useState<string | null>(null);
   const [isGameReady, setIsGameReady] = useState(false);
@@ -78,7 +71,7 @@ export default function GameWaitingRoom({
             console.log('[NON-HOST] Fetched game state:', gameData);
             
             if (gameData.currentRound && gameData.gameState) {
-              onStartGame?.({
+              startGameAction({
                 round: gameData.currentRound,
                 gameState: gameData.gameState
               });
@@ -128,7 +121,7 @@ export default function GameWaitingRoom({
                     round: data.currentRound,
                     gameState: data.gameState
                   });
-                  onStartGame?.({
+                  startGameAction({
                     round: data.currentRound,
                     gameState: data.gameState
                   });
@@ -165,7 +158,7 @@ export default function GameWaitingRoom({
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [roomId, isHost, onStartGame]);
+  }, [roomId, isHost, startGameAction]);
 
   // Fetch players from database
   useEffect(() => {
@@ -225,7 +218,7 @@ export default function GameWaitingRoom({
         console.log('[HOST] Game started successfully, transitioning to game screen');
         
         // Room status is updated in the API, Realtime will notify non-host players
-        onStartGame?.(result);
+        startGameAction(result);
       } catch (err) {
         console.error('[HOST] Failed to start game:', err);
         setIsStarting(false);
@@ -381,14 +374,12 @@ export default function GameWaitingRoom({
           </button>
           
           {/* Back Button */}
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
-            >
-              ← BACK TO MENU
-            </button>
-          )}
+          <button
+            onClick={backToMenu}
+            className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
+          >
+            ← BACK TO MENU
+          </button>
         </div>
 
         {/* Status Messages */}

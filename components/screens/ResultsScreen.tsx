@@ -2,22 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-
-interface ResultsScreenProps {
-  roomId: string;
-  roomName: string;
-  round: number;
-  maxRounds: number;
-  score: number;
-  lives: number;
-  maxLives: number;
-  leftConcept: string;
-  rightConcept: string;
-  psychicHint: string;
-  targetPosition: number;
-  onNextRound?: () => void;
-  onBack?: () => void;
-}
+import { useGameStore } from '@/lib/store';
 
 interface PlayerGuess {
   playerId: string;
@@ -27,23 +12,35 @@ interface PlayerGuess {
   points: number;
 }
 
-export default function ResultsScreen({
-  roomId,
-  roomName,
-  round,
-  maxRounds,
-  score,
-  lives,
-  maxLives,
-  leftConcept,
-  rightConcept,
-  psychicHint,
-  targetPosition,
-  onNextRound,
-  onBack
-}: ResultsScreenProps) {
+export default function ResultsScreen() {
+  const { 
+    gameData, 
+    roundData,
+    setCurrentScreen
+  } = useGameStore();
+  
+  if (!gameData || !roundData) return null;
+  
+  const roomId = gameData.roomId;
+  const roomName = gameData.gameSettings.roomName;
+  const maxRounds = gameData.gameSettings.numberOfRounds;
+  const maxLives = gameData.gameSettings.numberOfLives;
+  const round = roundData.gameState.current_round;
+  const score = roundData.gameState.team_score;
+  const lives = roundData.gameState.lives_remaining;
+  const leftConcept = roundData.round.left_concept;
+  const rightConcept = roundData.round.right_concept;
+  const psychicHint = roundData.round.psychic_hint;
+  const targetPosition = roundData.round.target_position;
+  
   const [playerGuesses, setPlayerGuesses] = useState<PlayerGuess[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleNextRound = () => {
+    console.log('Next round clicked');
+    // TODO: Start next round logic
+    setCurrentScreen('game');
+  };
 
   // Fetch all player guesses
   useEffect(() => {
@@ -281,7 +278,7 @@ export default function ResultsScreen({
           {/* Next Round Button */}
           <div className="text-center">
             <button
-              onClick={onNextRound}
+              onClick={handleNextRound}
               className="px-12 py-6 bg-fuchsia-600 border-2 border-fuchsia-500 text-white text-2xl font-bold uppercase tracking-widest hover:bg-fuchsia-700 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] transition-all duration-300"
             >
               {round >= maxRounds ? 'FINISH GAME' : 'NEXT ROUND'}
@@ -291,16 +288,14 @@ export default function ResultsScreen({
       </div>
 
       {/* Back button for testing */}
-      {onBack && (
-        <div className="absolute top-20 left-4">
-          <button
-            onClick={onBack}
-            className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
-          >
-            ← BACK
-          </button>
-        </div>
-      )}
+      <div className="absolute top-20 left-4">
+        <button
+          onClick={() => setCurrentScreen('lobby')}
+          className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
+        >
+          ← BACK
+        </button>
+      </div>
     </div>
   );
 }

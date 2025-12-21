@@ -2,33 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useGameStore } from '@/lib/store';
 
 // Extend Window interface for throttling
 declare global {
   interface Window {
     _lastDialUpdate?: number;
   }
-}
-
-interface ActiveGameScreenProps {
-  roomId: string;
-  roomName: string;
-  round: number;
-  maxRounds: number;
-  score: number;
-  lives: number;
-  maxLives: number;
-  playerId: string;
-  playerName: string;
-  peerId: string;
-  isPsychic?: boolean;
-  leftConcept: string;
-  rightConcept: string;
-  psychicHint: string;
-  targetPosition?: number;
-  onLockInGuess?: (position: number) => void;
-  onBack?: () => void;
-  onShowResults?: () => void;
 }
 
 interface Player {
@@ -44,26 +24,29 @@ interface OtherPlayerDial {
   isLocked: boolean;
 }
 
-export default function ActiveGameScreen({
-  roomId,
-  roomName,
-  round = 1,
-  maxRounds = 5,
-  score = 0,
-  lives = 3,
-  maxLives = 3,
-  playerId,
-  playerName,
-  peerId,
-  isPsychic = false,
-  leftConcept,
-  rightConcept,
-  psychicHint,
-  targetPosition,
-  onLockInGuess,
-  onBack,
-  onShowResults
-}: ActiveGameScreenProps) {
+export default function ActiveGameScreen() {
+  const { 
+    gameData, 
+    roundData, 
+    playerName,
+    setCurrentScreen
+  } = useGameStore();
+  
+  if (!gameData || !roundData) return null;
+  
+  const { roomId, playerId, peerId } = gameData;
+  const roomName = gameData.gameSettings.roomName;
+  const maxRounds = gameData.gameSettings.numberOfRounds;
+  const maxLives = gameData.gameSettings.numberOfLives;
+  const round = roundData.gameState.current_round;
+  const score = roundData.gameState.team_score;
+  const lives = roundData.gameState.lives_remaining;
+  const isPsychic = gameData.playerId === roundData.gameState.current_psychic_id;
+  const leftConcept = roundData.round.left_concept;
+  const rightConcept = roundData.round.right_concept;
+  const psychicHint = roundData.round.psychic_hint;
+  const targetPosition = roundData.round.target_position;
+  
   const targetWidth = 10; // 10% wide
   
   const [dialPosition, setDialPosition] = useState(50); // Current needle position - now dynamic
@@ -346,15 +329,11 @@ export default function ActiveGameScreen({
       
       // Navigate to results screen after a short delay
       setTimeout(() => {
-        console.log('[ActiveGame] Calling onShowResults callback');
-        if (onShowResults) {
-          onShowResults();
-        } else {
-          console.warn('[ActiveGame] onShowResults callback is not defined!');
-        }
+        console.log('[ActiveGame] Transitioning to results screen');
+        setCurrentScreen('results');
       }, 1500);
     }
-  }, [otherPlayerDials, isLocked, totalPlayers, allPlayersLocked, onShowResults]);
+  }, [otherPlayerDials, isLocked, totalPlayers, allPlayersLocked, setCurrentScreen]);
 
   // Glitch effect for hint text
   useEffect(() => {
@@ -390,8 +369,7 @@ export default function ActiveGameScreen({
     try {
       // Update dial position with locked status
       await updateDialPosition(dialPosition, true);
-      
-      onLockInGuess?.(dialPosition);
+      console.log(`${playerName} locked in guess at ${dialPosition}%`);
     } catch (err) {
       console.error('Failed to lock position:', err);
       // Revert lock state on error
@@ -657,16 +635,14 @@ export default function ActiveGameScreen({
       </div>
 
       {/* Back button for testing */}
-      {onBack && (
-        <div className="absolute top-20 left-4">
-          <button
-            onClick={onBack}
-            className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
-          >
-            ← BACK
-          </button>
-        </div>
-      )}
+      <div className="absolute top-20 left-4">
+        <button
+          onClick={() => setCurrentScreen('lobby')}
+          className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
+        >
+          ← BACK
+        </button>
+      </div>
     </div>
   );
 }

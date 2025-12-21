@@ -2,14 +2,10 @@
 
 import { useState } from 'react';
 import { joinGame, generatePeerId } from '@/lib/api-client';
+import { useGameStore } from '@/lib/store';
 
-interface JoinRoomFormProps {
-  playerName: string;
-  onJoinGame?: (gameData: { roomId: string; roomCode: string; playerId: string; peerId: string; gameSettings: any }) => void;
-  onBack?: () => void;
-}
-
-export default function JoinRoomForm({ playerName, onJoinGame, onBack }: JoinRoomFormProps) {
+export default function JoinRoomForm() {
+  const { playerName, joinGame: joinGameAction, backToMenu } = useGameStore();
   const [roomCode, setRoomCode] = useState<string>('');
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,13 +39,14 @@ export default function JoinRoomForm({ playerName, onJoinGame, onBack }: JoinRoo
           peerId
         });
         
-        onJoinGame?.({
+        joinGameAction({
           roomId: result.room.id,
           roomCode: result.room.room_code,
           playerId: result.player.id,
           peerId: result.player.peer_id,
           gameSettings: result.room.settings
         });
+        console.log(`${playerName} joined game with code ${result.room.room_code}`);
       } catch (err: any) {
         console.error('Failed to join game:', err);
         setError(err.message || 'Failed to join game. Please check the room code.');
@@ -173,16 +170,14 @@ export default function JoinRoomForm({ playerName, onJoinGame, onBack }: JoinRoo
                 {isJoining ? 'JOINING...' : 'JOIN GAME'}
               </button>
               
-              {onBack && (
-                <button
-                  type="button"
-                  onClick={onBack}
-                  disabled={isJoining}
-                  className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  ← BACK TO MENU
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={backToMenu}
+                disabled={isJoining}
+                className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ← BACK TO MENU
+              </button>
             </div>
           </form>
 

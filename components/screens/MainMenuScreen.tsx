@@ -1,22 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import { useGameStore } from '@/lib/store';
 
-interface MainMenuScreenProps {
-  playerName: string;
-  onCreateRoom?: () => void;
-  onJoinRoom?: () => void;
-}
-
-export default function MainMenuScreen({ playerName, onCreateRoom, onJoinRoom }: MainMenuScreenProps) {
+export default function MainMenuScreen() {
+  const { playerName, setCurrentScreen } = useGameStore();
   const [hoveredCard, setHoveredCard] = useState<'create' | 'join' | null>(null);
 
   const handleCreateRoom = () => {
-    onCreateRoom?.();
+    setCurrentScreen('create-room');
+    console.log(`${playerName} chose to create a room`);
   };
 
   const handleJoinRoom = () => {
-    onJoinRoom?.();
+    setCurrentScreen('join-room');
+    console.log(`${playerName} chose to join a room`);
   };
 
   return (
