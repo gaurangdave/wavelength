@@ -1,56 +1,202 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import WelcomeScreen from '@/components/screens/WelcomeScreen';
+import MainMenuScreen from '@/components/screens/MainMenuScreen';
+import CreateRoomForm from '@/components/screens/CreateRoomForm';
+import JoinRoomForm from '@/components/screens/JoinRoomForm';
+import GameWaitingRoom from '@/components/screens/GameWaitingRoom';
+import ActiveGameScreen from '@/components/screens/ActiveGameScreen';
+import ResultsScreen from '@/components/screens/ResultsScreen';
+
+interface GameSettings {
+  roomName: string;
+  numberOfLives: number;
+  numberOfRounds: number;
+  maxPoints: number;
+}
+
+interface GameData {
+  roomId: string;
+  roomCode: string;
+  playerId: string;
+  peerId: string;
+  gameSettings: GameSettings;
+}
+
+interface RoundData {
+  round: {
+    id: string;
+    round_number: number;
+    left_concept: string;
+    right_concept: string;
+    psychic_hint: string;
+    target_position: number;
+  };
+  gameState: {
+    current_round: number;
+    team_score: number;
+    lives_remaining: number;
+    current_psychic_id: string;
+  };
+}
 
 export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-5 text-white transition-colors hover:bg-blue-700 md:w-[158px]"
-            href="/hellosupa"
-          >
-            💬 HelloSupa
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  const [currentScreen, setCurrentScreen] = useState<'welcome' | 'main-menu' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'results'>('welcome');
+  const [playerName, setPlayerName] = useState<string>('');
+  const [gameData, setGameData] = useState<GameData | null>(null);
+  const [roundData, setRoundData] = useState<RoundData | null>(null);
+  const [isHost, setIsHost] = useState<boolean>(false);
+
+  const handlePlayerNameSubmit = (name: string) => {
+    setPlayerName(name);
+    setCurrentScreen('main-menu');
+    console.log(`Player ${name} is ready to choose their path!`);
+  };
+
+  const handleCreateRoom = () => {
+    setCurrentScreen('create-room');
+    console.log(`${playerName} chose to create a room`);
+  };
+
+  const handleJoinRoom = () => {
+    setCurrentScreen('join-room');
+    console.log(`${playerName} chose to join a room`);
+  };
+
+  const handleCreateGame = (data: GameData) => {
+    setGameData(data);
+    setIsHost(true);
+    setCurrentScreen('lobby');
+    console.log(`${playerName} created game "${data.gameSettings.roomName}" with code ${data.roomCode}:`, data);
+  };
+
+  const handleJoinGame = (data: GameData) => {
+    setGameData(data);
+    setIsHost(false);
+    setCurrentScreen('lobby');
+    console.log(`${playerName} joined game with code ${data.roomCode}:`, data);
+  };
+
+  const handleBackToMenu = () => {
+    setCurrentScreen('main-menu');
+    setGameData(null);
+    setRoundData(null);
+    setIsHost(false);
+  };
+
+  const handleStartGame = (data: RoundData) => {
+    setRoundData(data);
+    setCurrentScreen('game');
+    console.log(`Game started by ${playerName}`, data);
+  };
+
+  const handleLockInGuess = (position: number) => {
+    console.log(`${playerName} locked in guess at ${position}%`);
+  };
+
+  const handleBackToLobby = () => {
+    setCurrentScreen('lobby');
+  };
+
+  const handleShowResults = () => {
+    setCurrentScreen('results');
+    console.log(`${playerName} viewing results`, roundData);
+  };
+
+  const handleNextRound = () => {
+    console.log(`${playerName} clicked next round`);
+    // TODO: Start next round logic
+    setCurrentScreen('game');
+  };
+
+  const renderCurrentScreen = () => {
+    switch (currentScreen) {
+      case 'welcome':
+        return <WelcomeScreen onNext={handlePlayerNameSubmit} />;
+      case 'main-menu':
+        return (
+          <MainMenuScreen 
+            playerName={playerName} 
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+          />
+        );
+      case 'create-room':
+        return (
+          <CreateRoomForm 
+            playerName={playerName}
+            onCreateGame={handleCreateGame}
+            onBack={handleBackToMenu}
+          />
+        );
+      case 'lobby':
+        return gameData ? (
+          <GameWaitingRoom
+            roomId={gameData.roomId}
+            roomName={gameData.gameSettings.roomName}
+            roomCode={gameData.roomCode}
+            playerName={playerName}
+            playerId={gameData.playerId}
+            peerId={gameData.peerId}
+            isHost={isHost}
+            onStartGame={handleStartGame}
+            onBack={handleBackToMenu}
+          />
+        ) : null;
+      case 'join-room':
+        return (
+          <JoinRoomForm
+            playerName={playerName}
+            onJoinGame={handleJoinGame}
+            onBack={handleBackToMenu}
+          />
+        );
+      case 'game':
+        return gameData && roundData ? (
+          <ActiveGameScreen
+            roomId={gameData.roomId}
+            roomName={gameData.gameSettings.roomName}
+            round={roundData.gameState.current_round}
+            maxRounds={gameData.gameSettings.numberOfRounds}
+            score={roundData.gameState.team_score}
+            lives={roundData.gameState.lives_remaining}
+            maxLives={gameData.gameSettings.numberOfLives}
+            playerId={gameData.playerId}
+            playerName={playerName}
+            peerId={gameData.peerId}
+            isPsychic={gameData.playerId === roundData.gameState.current_psychic_id}
+            leftConcept={roundData.round.left_concept}
+            rightConcept={roundData.round.right_concept}
+            psychicHint={roundData.round.psychic_hint}
+            targetPosition={roundData.round.target_position}
+            onLockInGuess={handleLockInGuess}
+            onBack={handleBackToLobby}
+            onShowResults={handleShowResults}
+          />
+        ) : null;
+      case 'results':
+        return gameData && roundData ? (
+          <ResultsScreen
+            roomId={gameData.roomId}
+            roomName={gameData.gameSettings.roomName}
+            round={roundData.gameState.current_round}
+            maxRounds={gameData.gameSettings.numberOfRounds}
+            score={roundData.gameState.team_score}
+            lives={roundData.gameState.lives_remaining}
+            maxLives={gameData.gameSettings.numberOfLives}
+            leftConcept={roundData.round.left_concept}
+            rightConcept={roundData.round.right_concept}
+            psychicHint={roundData.round.psychic_hint}
+            targetPosition={roundData.round.target_position}
+            onNextRound={handleNextRound}
+            onBack={handleBackToLobby}
+          />
+        ) : null;
+      default:
+        return <WelcomeScreen onNext={handlePlayerNameSubmit} />;
+    }
+  };
+
+  return renderCurrentScreen();
 }
