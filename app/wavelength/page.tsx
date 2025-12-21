@@ -7,6 +7,7 @@ import CreateRoomForm from '@/components/screens/CreateRoomForm';
 import JoinRoomForm from '@/components/screens/JoinRoomForm';
 import GameWaitingRoom from '@/components/screens/GameWaitingRoom';
 import ActiveGameScreen from '@/components/screens/ActiveGameScreen';
+import ResultsScreen from '@/components/screens/ResultsScreen';
 
 interface GameSettings {
   roomName: string;
@@ -41,7 +42,7 @@ interface RoundData {
 }
 
 export default function WavelengthGamePage() {
-  const [currentScreen, setCurrentScreen] = useState<'welcome' | 'main-menu' | 'create-room' | 'join-room' | 'lobby' | 'game'>('welcome');
+  const [currentScreen, setCurrentScreen] = useState<'welcome' | 'main-menu' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'results'>('welcome');
   const [playerName, setPlayerName] = useState<string>('');
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [roundData, setRoundData] = useState<RoundData | null>(null);
@@ -96,6 +97,17 @@ export default function WavelengthGamePage() {
 
   const handleBackToLobby = () => {
     setCurrentScreen('lobby');
+  };
+
+  const handleShowResults = () => {
+    setCurrentScreen('results');
+    console.log(`${playerName} viewing results`, roundData);
+  };
+
+  const handleNextRound = () => {
+    console.log(`${playerName} clicked next round`);
+    // TODO: Start next round logic
+    setCurrentScreen('game');
   };
 
   const renderCurrentScreen = () => {
@@ -159,6 +171,25 @@ export default function WavelengthGamePage() {
             psychicHint={roundData.round.psychic_hint}
             targetPosition={roundData.round.target_position}
             onLockInGuess={handleLockInGuess}
+            onBack={handleBackToLobby}
+            onShowResults={handleShowResults}
+          />
+        ) : null;
+      case 'results':
+        return gameData && roundData ? (
+          <ResultsScreen
+            roomId={gameData.roomId}
+            roomName={gameData.gameSettings.roomName}
+            round={roundData.gameState.current_round}
+            maxRounds={gameData.gameSettings.numberOfRounds}
+            score={roundData.gameState.team_score}
+            lives={roundData.gameState.lives_remaining}
+            maxLives={gameData.gameSettings.numberOfLives}
+            leftConcept={roundData.round.left_concept}
+            rightConcept={roundData.round.right_concept}
+            psychicHint={roundData.round.psychic_hint}
+            targetPosition={roundData.round.target_position}
+            onNextRound={handleNextRound}
             onBack={handleBackToLobby}
           />
         ) : null;

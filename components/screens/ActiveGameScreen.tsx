@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { lockDialPosition } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
 
 // Extend Window interface for throttling
@@ -29,6 +28,7 @@ interface ActiveGameScreenProps {
   targetPosition?: number;
   onLockInGuess?: (position: number) => void;
   onBack?: () => void;
+  onShowResults?: () => void;
 }
 
 interface Player {
@@ -61,7 +61,8 @@ export default function ActiveGameScreen({
   psychicHint,
   targetPosition,
   onLockInGuess,
-  onBack
+  onBack,
+  onShowResults
 }: ActiveGameScreenProps) {
   const targetWidth = 10; // 10% wide
   
@@ -70,6 +71,80 @@ export default function ActiveGameScreen({
   const [isLocked, setIsLocked] = useState(false);
   const [glitchEffect, setGlitchEffect] = useState(false);
   const [otherPlayerDials, setOtherPlayerDials] = useState<OtherPlayerDial[]>([]);
+  const [totalPlayers, setTotalPlayers] = useState(0);
+  const [allPlayersLocked, setAllPlayersLocked] = useState(false);
+
+  // Fetch total player count
+  useEffect(() => {
+    const fetchPlayerCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('players')
+          .select('*', { count: 'exact', head: true })
+          .eq('room_id', roomId);
+        
+        if (error) throw error;
+        setTotalPlayers(count || 0);
+        console.log('[ActiveGame] Total players in room:', count);
+      } catch (err) {
+        console.error('Failed to fetch player count:', err);
+      }
+    };
+    
+    fetchPlayerCount();
+  }, [roomId]);
+
+  // Fetch existing dial positions (also used for polling)
+  const fetchExistingDials = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('dial_updates')
+        .select('player_id, dial_position, is_locked')
+        .eq('room_id', roomId)
+        .eq('round_number', round)
+        .neq('player_id', playerId);
+      
+      if (error) {
+        console.error('[ActiveGame] Error fetching existing dials:', error);
+        throw error;
+      }
+      
+      if (data) {
+        const dials = data.map(d => ({
+          playerId: d.player_id,
+          playerName: 'Player',
+          position: d.dial_position,
+          isLocked: d.is_locked
+        }));
+        setOtherPlayerDials(dials);
+        console.log('[ActiveGame] Updated dial positions:', dials);
+      }
+    } catch (err) {
+      console.error('[ActiveGame] Failed to fetch existing dials:', err);
+    }
+  };
+
+  // Initial fetch on mount
+  useEffect(() => {
+    console.log('[ActiveGame] Initial fetch for room:', roomId, 'round:', round);
+    fetchExistingDials();
+  }, [roomId, round, playerId]);
+
+  // Polling fallback - check every 2 seconds for updates
+  useEffect(() => {
+    console.log('[ActiveGame] Starting polling for dial updates');
+    const pollInterval = setInterval(() => {
+      if (!isLocked) {
+        // Only poll while we haven't locked yet
+        fetchExistingDials();
+      }
+    }, 2000);
+
+    return () => {
+      console.log('[ActiveGame] Stopping polling');
+      clearInterval(pollInterval);
+    };
+  }, [roomId, round, playerId, isLocked]);
 
   // Subscribe to dial position updates via Realtime
   useEffect(() => {
@@ -85,36 +160,39 @@ export default function ActiveGameScreen({
           table: 'dial_updates',
           filter: `room_id=eq.${roomId}`
         },
-        (payload) => {
+        (payload: any) => {
           console.log('[Realtime] Dial update received:', payload);
+          console.log('[Realtime] Payload details - eventType:', payload.eventType, 'new:', payload.new);
           
-          // Ignore updates from yourself
-          if (payload.new?.player_id === playerId) {
-            return;
-          }
-          
+          // Handle the update
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const update = payload.new;
+            const update = payload.new as any;
+            
+            // Ignore updates from yourself
+            if (update?.player_id === playerId) {
+              console.log('[Realtime] Ignoring my own update');
+              return;
+            }
+            
+            console.log('[Realtime] Processing update for player:', update?.player_id, 'locked:', update?.is_locked, 'position:', update?.dial_position);
+            
             setOtherPlayerDials(prev => {
               const existing = prev.find(d => d.playerId === update.player_id);
+              const newDial = {
+                playerId: update.player_id,
+                playerName: existing?.playerName || 'Player',
+                position: update.dial_position,
+                isLocked: update.is_locked
+              };
+              
               if (existing) {
+                console.log('[Realtime] Updating existing player dial:', newDial);
                 return prev.map(d => 
-                  d.playerId === update.player_id
-                    ? { 
-                        playerId: update.player_id,
-                        playerName: d.playerName, // Keep existing name
-                        position: update.dial_position,
-                        isLocked: update.is_locked
-                      }
-                    : d
+                  d.playerId === update.player_id ? newDial : d
                 );
               } else {
-                return [...prev, {
-                  playerId: update.player_id,
-                  playerName: 'Player', // Default name
-                  position: update.dial_position,
-                  isLocked: update.is_locked
-                }];
+                console.log('[Realtime] Adding new player dial:', newDial);
+                return [...prev, newDial];
               }
             });
           }
@@ -128,17 +206,18 @@ export default function ActiveGameScreen({
       console.log('[ActiveGame] Cleaning up dial updates subscription');
       supabase.removeChannel(channel);
     };
-  }, [roomId, playerId]);
+  }, [roomId, round, playerId]);
 
   // Scoring zones (like the original Wavelength game)
+  const targetPos = targetPosition ?? 50; // Default to center if not provided
   const scoringZones = [
-    { start: targetPosition, width: 4, color: '#ef4444', points: 4, label: 'PERFECT' }, // Red center
-    { start: targetPosition - 2, width: 2, color: '#f97316', points: 3, label: 'GREAT' }, // Orange
-    { start: targetPosition + 4, width: 2, color: '#f97316', points: 3, label: 'GREAT' }, // Orange
-    { start: targetPosition - 4, width: 2, color: '#eab308', points: 2, label: 'GOOD' }, // Yellow
-    { start: targetPosition + 6, width: 2, color: '#eab308', points: 2, label: 'GOOD' }, // Yellow
-    { start: targetPosition - 6, width: 2, color: '#06b6d4', points: 1, label: 'CLOSE' }, // Cyan
-    { start: targetPosition + 8, width: 2, color: '#06b6d4', points: 1, label: 'CLOSE' }, // Cyan
+    { start: targetPos, width: 4, color: '#ef4444', points: 4, label: 'PERFECT' }, // Red center
+    { start: targetPos - 2, width: 2, color: '#f97316', points: 3, label: 'GREAT' }, // Orange
+    { start: targetPos + 4, width: 2, color: '#f97316', points: 3, label: 'GREAT' }, // Orange
+    { start: targetPos - 4, width: 2, color: '#eab308', points: 2, label: 'GOOD' }, // Yellow
+    { start: targetPos + 6, width: 2, color: '#eab308', points: 2, label: 'GOOD' }, // Yellow
+    { start: targetPos - 6, width: 2, color: '#06b6d4', points: 1, label: 'CLOSE' }, // Cyan
+    { start: targetPos + 8, width: 2, color: '#06b6d4', points: 1, label: 'CLOSE' }, // Cyan
   ];
 
   // Mouse/Touch interaction functions
@@ -183,11 +262,6 @@ export default function ActiveGameScreen({
     if (dialElement) {
       const newPosition = calculateAngleFromPointer(event.clientX, event.clientY, dialElement);
       setDialPosition(newPosition);
-      // Throttle updates to database (only update every 100ms)
-      if (!window._lastDialUpdate || Date.now() - window._lastDialUpdate > 100) {
-        window._lastDialUpdate = Date.now();
-        updateDialPosition(newPosition, false);
-      }
     }
   };
 
@@ -200,11 +274,6 @@ export default function ActiveGameScreen({
     if (dialElement) {
       const newPosition = calculateAngleFromPointer(touch.clientX, touch.clientY, dialElement);
       setDialPosition(newPosition);
-      // Throttle updates to database (only update every 100ms)
-      if (!window._lastDialUpdate || Date.now() - window._lastDialUpdate > 100) {
-        window._lastDialUpdate = Date.now();
-        updateDialPosition(newPosition, false);
-      }
     }
   };
 
@@ -246,6 +315,43 @@ export default function ActiveGameScreen({
     { id: '4', name: 'Player 456', isPsychic: false },
   ];
 
+  // Check if all players have locked in
+  useEffect(() => {
+    console.log('[ActiveGame] Checking lock status. totalPlayers:', totalPlayers, 'isLocked:', isLocked, 'otherPlayerDials:', otherPlayerDials);
+    
+    if (totalPlayers === 0) {
+      console.log('[ActiveGame] Waiting for player count...');
+      return;
+    }
+    
+    const lockedCount = otherPlayerDials.filter(d => d.isLocked).length + (isLocked ? 1 : 0);
+    const allLocked = lockedCount === totalPlayers;
+    
+    console.log('[ActiveGame] Lock status:', { 
+      lockedCount, 
+      totalPlayers, 
+      allLocked,
+      myLockStatus: isLocked,
+      otherPlayersLocked: otherPlayerDials.filter(d => d.isLocked).length,
+      otherPlayerDials: otherPlayerDials.map(d => ({ id: d.playerId, locked: d.isLocked, pos: d.position }))
+    });
+    
+    if (allLocked && !allPlayersLocked) {
+      console.log('[ActiveGame] ✅ All players locked in! Transitioning to results...');
+      setAllPlayersLocked(true);
+      
+      // Navigate to results screen after a short delay
+      setTimeout(() => {
+        console.log('[ActiveGame] Calling onShowResults callback');
+        if (onShowResults) {
+          onShowResults();
+        } else {
+          console.warn('[ActiveGame] onShowResults callback is not defined!');
+        }
+      }, 1500);
+    }
+  }, [otherPlayerDials, isLocked, totalPlayers, allPlayersLocked, onShowResults]);
+
   // Glitch effect for hint text
   useEffect(() => {
     const interval = setInterval(() => {
@@ -278,9 +384,6 @@ export default function ActiveGameScreen({
     setIsLocked(true);
     
     try {
-      // Save locked position to database (via API)
-      await lockDialPosition(roomId, round, playerId, dialPosition);
-      
       // Update dial position with locked status
       await updateDialPosition(dialPosition, true);
       
@@ -297,7 +400,7 @@ export default function ActiveGameScreen({
 
   // Create gradient for scoring zones
   const createDialGradient = () => {
-    const targetAngle = targetPosition * 1.8 - 90; // Convert percentage to degrees
+    const targetAngle = targetPos * 1.8 - 90; // Convert percentage to degrees
     
     return `conic-gradient(
       from -90deg at 50% 100%,
