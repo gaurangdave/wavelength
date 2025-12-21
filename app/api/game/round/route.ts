@@ -98,10 +98,11 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to handle round action';
     console.error('Error handling round action:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to handle round action' },
+      { error: message },
       { status: 500 }
     );
   }

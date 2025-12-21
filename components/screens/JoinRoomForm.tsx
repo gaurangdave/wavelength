@@ -39,7 +39,7 @@ export default function JoinRoomForm() {
           roomCode,
           playerName
         });
-      } catch (err) {
+      } catch {
         // Error is handled in the store
       }
     }

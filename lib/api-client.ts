@@ -26,12 +26,12 @@ export interface StartGameRequest {
 
 export interface RoundAction {
   action: 'create' | 'update-hint' | 'lock-position' | 'reveal' | 'advance';
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface PlayerAction {
   action: 'assign-psychic' | 'update-connection';
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export async function createGame(data: CreateGameRequest) {

@@ -19,20 +19,6 @@ export default function ResultsScreen() {
     setCurrentScreen
   } = useGameStore();
   
-  if (!gameData || !roundData) return null;
-  
-  const roomId = gameData.roomId;
-  const roomName = gameData.gameSettings.roomName;
-  const maxRounds = gameData.gameSettings.numberOfRounds;
-  const maxLives = gameData.gameSettings.numberOfLives;
-  const round = roundData.gameState.current_round;
-  const score = roundData.gameState.team_score;
-  const lives = roundData.gameState.lives_remaining;
-  const leftConcept = roundData.round.left_concept;
-  const rightConcept = roundData.round.right_concept;
-  const psychicHint = roundData.round.psychic_hint;
-  const targetPosition = roundData.round.target_position;
-  
   const [playerGuesses, setPlayerGuesses] = useState<PlayerGuess[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,6 +30,12 @@ export default function ResultsScreen() {
 
   // Fetch all player guesses
   useEffect(() => {
+    if (!gameData || !roundData) return;
+    
+    const roomId = gameData.roomId;
+    const round = roundData.gameState.current_round;
+    const targetPosition = roundData.round.target_position;
+    
     const fetchGuesses = async () => {
       try {
         const { data: dialData, error: dialError } = await supabase
@@ -96,7 +88,20 @@ export default function ResultsScreen() {
     };
 
     fetchGuesses();
-  }, [roomId, round, targetPosition]);
+  }, [gameData, roundData]);
+
+  if (!gameData || !roundData) return null;
+  
+  const roomName = gameData.gameSettings.roomName;
+  const maxRounds = gameData.gameSettings.numberOfRounds;
+  const maxLives = gameData.gameSettings.numberOfLives;
+  const score = roundData.gameState.team_score;
+  const lives = roundData.gameState.lives_remaining;
+  const leftConcept = roundData.round.left_concept;
+  const rightConcept = roundData.round.right_concept;
+  const psychicHint = roundData.round.psychic_hint;
+  const targetPosition = roundData.round.target_position;
+  const round = roundData.gameState.current_round;
 
   // Create gradient for scoring zones
   const createDialGradient = () => {
@@ -159,7 +164,7 @@ export default function ResultsScreen() {
               {leftConcept} ⟷ {rightConcept}
             </div>
             <div className="text-fuchsia-400 text-xl font-bold">
-              Psychic Hint: "{psychicHint}"
+              Psychic Hint: &ldquo;{psychicHint}&rdquo;
             </div>
             <div className="text-yellow-400 text-lg mt-4 font-bold">
               Team Earned: +{totalPoints} Points

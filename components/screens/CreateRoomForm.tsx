@@ -55,7 +55,7 @@ export default function CreateRoomForm() {
             maxPoints: gameSettings.maxPoints
           }
         });
-      } catch (err) {
+      } catch {
         // Error is handled in the store
       }
     }

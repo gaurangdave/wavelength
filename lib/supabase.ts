@@ -157,7 +157,7 @@ export type Database = {
           from_peer_id: string
           to_peer_id: string | null
           type: 'offer' | 'answer' | 'ice-candidate'
-          payload: any
+          payload: Json
           is_consumed: boolean
           created_at: string
         }
@@ -167,7 +167,7 @@ export type Database = {
           from_peer_id: string
           to_peer_id?: string | null
           type: 'offer' | 'answer' | 'ice-candidate'
-          payload: any
+          payload: Json
           is_consumed?: boolean
           created_at?: string
         }
@@ -177,7 +177,7 @@ export type Database = {
           from_peer_id?: string
           to_peer_id?: string | null
           type?: 'offer' | 'answer' | 'ice-candidate'
-          payload?: any
+          payload?: Json
           is_consumed?: boolean
           created_at?: string
         }

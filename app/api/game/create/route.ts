@@ -24,10 +24,11 @@ export async function POST(request: NextRequest) {
       room,
       player
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create game';
     console.error('Error creating game:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create game' },
+      { error: message },
       { status: 500 }
     );
   }

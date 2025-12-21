@@ -40,10 +40,11 @@ export async function GET(request: NextRequest) {
       gameState,
       currentRound
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch game state';
     console.error('Error fetching game state:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch game state' },
+      { error: message },
       { status: 500 }
     );
   }

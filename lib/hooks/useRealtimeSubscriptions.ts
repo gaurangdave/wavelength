@@ -158,7 +158,7 @@ export function useDialUpdates(
           table: 'dial_updates',
           filter: `room_id=eq.${roomId}`
         },
-        (payload: { eventType: string; new: any; old: any }) => {
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           console.log('[useDialUpdates] Dial update received:', payload);
           
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {

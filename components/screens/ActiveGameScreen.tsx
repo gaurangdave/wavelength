@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useGameStore } from '@/lib/store';
-import { useDialUpdates } from '@/lib/hooks/useRealtimeSubscriptions';
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { useGameStore } from "@/lib/store";
+import { useDialUpdates } from "@/lib/hooks/useRealtimeSubscriptions";
 
 // Extend Window interface for throttling
 declare global {
@@ -26,42 +26,29 @@ interface OtherPlayerDial {
 }
 
 export default function ActiveGameScreen() {
-  const { 
-    gameData, 
-    roundData, 
-    playerName,
-    setCurrentScreen
-  } = useGameStore();
-  
+  const { gameData, roundData, playerName, setCurrentScreen } = useGameStore();
+
   const [dialPosition, setDialPosition] = useState(50); // Current needle position - now dynamic
   const [isDragging, setIsDragging] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [glitchEffect, setGlitchEffect] = useState(false);
-  const [otherPlayerDials, setOtherPlayerDials] = useState<OtherPlayerDial[]>([]);
+  const [otherPlayerDials, setOtherPlayerDials] = useState<OtherPlayerDial[]>(
+    []
+  );
   const [totalPlayers, setTotalPlayers] = useState(0);
   const [allPlayersLocked, setAllPlayersLocked] = useState(false);
-  
-  if (!gameData || !roundData) return null;
-  
-  const { roomId, playerId } = gameData;
-  const roomName = gameData.gameSettings.roomName;
-  const maxRounds = gameData.gameSettings.numberOfRounds;
-  const maxLives = gameData.gameSettings.numberOfLives;
-  const round = roundData.gameState.current_round;
-  const score = roundData.gameState.team_score;
-  const lives = roundData.gameState.lives_remaining;
-  const isPsychic = gameData.playerId === roundData.gameState.current_psychic_id;
-  const leftConcept = roundData.round.left_concept;
-  const rightConcept = roundData.round.right_concept;
-  const psychicHint = roundData.round.psychic_hint;
-  const targetPosition = roundData.round.target_position;
-  
-  console.log('[ActiveGame] Component render - playerId:', gameData.playerId, 'psychicId:', roundData.gameState.current_psychic_id, 'isPsychic:', isPsychic);
+
+  // Extract values with fallbacks for hook dependencies
+  const roomId = gameData?.roomId || "";
+  const playerId = gameData?.playerId || "";
+  const round = roundData?.gameState.current_round || 0;
+  const isPsychic =
+    gameData?.playerId === roundData?.gameState.current_psychic_id;
 
   // Handle dial updates from other players via custom hook
   const handleDialUpdate = useCallback((dials: OtherPlayerDial[]) => {
     setOtherPlayerDials(dials);
-    console.log('[ActiveGame] Updated dial positions:', dials);
+    console.log("[ActiveGame] Updated dial positions:", dials);
   }, []);
 
   useDialUpdates(roomId, round, playerId, isLocked, handleDialUpdate);
@@ -71,164 +58,222 @@ export default function ActiveGameScreen() {
     const fetchPlayerCount = async () => {
       try {
         const { count, error } = await supabase
-          .from('players')
-          .select('*', { count: 'exact', head: true })
-          .eq('room_id', roomId);
-        
+          .from("players")
+          .select("*", { count: "exact", head: true })
+          .eq("room_id", roomId);
+
         if (error) throw error;
         setTotalPlayers(count || 0);
-        console.log('[ActiveGame] Total players in room:', count);
+        console.log("[ActiveGame] Total players in room:", count);
       } catch (err) {
-        console.error('Failed to fetch player count:', err);
+        console.error("Failed to fetch player count:", err);
       }
     };
-    
+
     fetchPlayerCount();
   }, [roomId]);
 
-  // Scoring zones (like the original Wavelength game)
-  const targetPos = targetPosition ?? 50; // Default to center if not provided
-  const scoringZones = [
-    { start: targetPos, width: 4, color: '#ef4444', points: 4, label: 'PERFECT' }, // Red center
-    { start: targetPos - 2, width: 2, color: '#f97316', points: 3, label: 'GREAT' }, // Orange
-    { start: targetPos + 4, width: 2, color: '#f97316', points: 3, label: 'GREAT' }, // Orange
-    { start: targetPos - 4, width: 2, color: '#eab308', points: 2, label: 'GOOD' }, // Yellow
-    { start: targetPos + 6, width: 2, color: '#eab308', points: 2, label: 'GOOD' }, // Yellow
-    { start: targetPos - 6, width: 2, color: '#06b6d4', points: 1, label: 'CLOSE' }, // Cyan
-    { start: targetPos + 8, width: 2, color: '#06b6d4', points: 1, label: 'CLOSE' }, // Cyan
-  ];
-
   // Mouse/Touch interaction functions
-  const calculateAngleFromPointer = (clientX: number, clientY: number, dialElement: HTMLElement) => {
-    const rect = dialElement.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.bottom; // Bottom of the dial semicircle
-    
-    const angle = (Math.atan2(clientX - centerX, centerY - clientY) * 180) / Math.PI;
-    const clampedAngle = Math.max(-90, Math.min(90, angle));
-    
-    // Convert angle to percentage (0% = left, 100% = right)
-    const percentage = ((clampedAngle + 90) / 180) * 100;
-    return Math.max(0, Math.min(100, percentage));
-  };
+  const calculateAngleFromPointer = useCallback(
+    (clientX: number, clientY: number, dialElement: HTMLElement) => {
+      const rect = dialElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.bottom; // Bottom of the dial semicircle
 
-  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (isLocked || isPsychic) return;
-    event.preventDefault();
-    
-    setIsDragging(true);
-    const dialElement = event.currentTarget;
-    const newPosition = calculateAngleFromPointer(event.clientX, event.clientY, dialElement);
-    setDialPosition(newPosition);
-  };
+      const angle =
+        (Math.atan2(clientX - centerX, centerY - clientY) * 180) / Math.PI;
+      const clampedAngle = Math.max(-90, Math.min(90, angle));
 
-  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (isLocked || isPsychic) return;
-    event.preventDefault();
-    
-    const touch = event.touches[0];
-    setIsDragging(true);
-    const dialElement = event.currentTarget;
-    const newPosition = calculateAngleFromPointer(touch.clientX, touch.clientY, dialElement);
-    setDialPosition(newPosition);
-  };
+      // Convert angle to percentage (0% = left, 100% = right)
+      const percentage = ((clampedAngle + 90) / 180) * 100;
+      return Math.max(0, Math.min(100, percentage));
+    },
+    []
+  );
 
-  const handleMouseMove = (event: MouseEvent) => {
-    if (!isDragging || isLocked || isPsychic) return;
-    
-    const dialElement = document.querySelector('#dial-container') as HTMLElement;
-    if (dialElement) {
-      const newPosition = calculateAngleFromPointer(event.clientX, event.clientY, dialElement);
+  const handleMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (isLocked || isPsychic) return;
+      event.preventDefault();
+
+      setIsDragging(true);
+      const dialElement = event.currentTarget;
+      const newPosition = calculateAngleFromPointer(
+        event.clientX,
+        event.clientY,
+        dialElement
+      );
       setDialPosition(newPosition);
-    }
-  };
+    },
+    [isLocked, isPsychic, calculateAngleFromPointer]
+  );
 
-  const handleTouchMove = (event: TouchEvent) => {
-    if (!isDragging || isLocked || isPsychic) return;
-    event.preventDefault();
-    
-    const touch = event.touches[0];
-    const dialElement = document.querySelector('#dial-container') as HTMLElement;
-    if (dialElement) {
-      const newPosition = calculateAngleFromPointer(touch.clientX, touch.clientY, dialElement);
+  const handleTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      if (isLocked || isPsychic) return;
+      event.preventDefault();
+
+      const touch = event.touches[0];
+      setIsDragging(true);
+      const dialElement = event.currentTarget;
+      const newPosition = calculateAngleFromPointer(
+        touch.clientX,
+        touch.clientY,
+        dialElement
+      );
       setDialPosition(newPosition);
-    }
-  };
+    },
+    [isLocked, isPsychic, calculateAngleFromPointer]
+  );
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  const handleMouseMove = useCallback(
+    (event: MouseEvent) => {
+      if (!isDragging || isLocked || isPsychic) return;
 
-  const handleTouchEnd = () => {
+      const dialElement = document.querySelector(
+        "#dial-container"
+      ) as HTMLElement;
+      if (dialElement) {
+        const newPosition = calculateAngleFromPointer(
+          event.clientX,
+          event.clientY,
+          dialElement
+        );
+        setDialPosition(newPosition);
+      }
+    },
+    [isDragging, isLocked, isPsychic, calculateAngleFromPointer]
+  );
+
+  const handleTouchMove = useCallback(
+    (event: TouchEvent) => {
+      if (!isDragging || isLocked || isPsychic) return;
+      event.preventDefault();
+
+      const touch = event.touches[0];
+      const dialElement = document.querySelector(
+        "#dial-container"
+      ) as HTMLElement;
+      if (dialElement) {
+        const newPosition = calculateAngleFromPointer(
+          touch.clientX,
+          touch.clientY,
+          dialElement
+        );
+        setDialPosition(newPosition);
+      }
+    },
+    [isDragging, isLocked, isPsychic, calculateAngleFromPointer]
+  );
+
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
-  };
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   // Add global mouse and touch event listeners
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleTouchEnd);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("touchmove", handleTouchMove, {
+        passive: false,
+      });
+      document.addEventListener("touchend", handleTouchEnd);
       // Prevent text selection while dragging
-      document.body.style.userSelect = 'none';
+      document.body.style.userSelect = "none";
     } else {
-      document.body.style.userSelect = '';
+      document.body.style.userSelect = "";
     }
-    
+
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-      document.body.style.userSelect = '';
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.body.style.userSelect = "";
     };
-  }, [isDragging, isLocked, isPsychic]);
+  }, [
+    isDragging,
+    isLocked,
+    isPsychic,
+    handleMouseMove,
+    handleMouseUp,
+    handleTouchMove,
+    handleTouchEnd,
+  ]);
 
   // Sample players
   const players: Player[] = [
-    { id: '1', name: 'Player 001', isPsychic: false },
-    { id: '2', name: 'Player 218', isPsychic: true },
-    { id: '3', name: playerName, isPsychic: false },
-    { id: '4', name: 'Player 456', isPsychic: false },
+    { id: "1", name: "Player 001", isPsychic: false },
+    { id: "2", name: "Player 218", isPsychic: true },
+    { id: "3", name: playerName, isPsychic: false },
+    { id: "4", name: "Player 456", isPsychic: false },
   ];
 
   // Check if all players have locked in
   useEffect(() => {
-    console.log('[ActiveGame] Checking lock status. totalPlayers:', totalPlayers, 'isPsychic:', isPsychic, 'isLocked:', isLocked, 'otherPlayerDials:', otherPlayerDials);
-    
+    console.log(
+      "[ActiveGame] Checking lock status. totalPlayers:",
+      totalPlayers,
+      "isPsychic:",
+      isPsychic,
+      "isLocked:",
+      isLocked,
+      "otherPlayerDials:",
+      otherPlayerDials
+    );
+
     if (totalPlayers === 0) {
-      console.log('[ActiveGame] Waiting for player count...');
+      console.log("[ActiveGame] Waiting for player count...");
       return;
     }
-    
+
     // Psychic doesn't lock in, so subtract 1 from total
     const nonPsychicPlayerCount = totalPlayers - 1;
-    const lockedCount = otherPlayerDials.filter(d => d.isLocked).length + (isLocked && !isPsychic ? 1 : 0);
+    const lockedCount =
+      otherPlayerDials.filter((d) => d.isLocked).length +
+      (isLocked && !isPsychic ? 1 : 0);
     const allLocked = lockedCount === nonPsychicPlayerCount;
-    
-    console.log('[ActiveGame] Lock status:', { 
-      lockedCount, 
+
+    console.log("[ActiveGame] Lock status:", {
+      lockedCount,
       totalPlayers,
       nonPsychicPlayerCount,
       allLocked,
       isPsychic,
       myLockStatus: isLocked,
-      otherPlayersLocked: otherPlayerDials.filter(d => d.isLocked).length,
-      otherPlayerDials: otherPlayerDials.map(d => ({ id: d.playerId, locked: d.isLocked, pos: d.position }))
+      otherPlayersLocked: otherPlayerDials.filter((d) => d.isLocked).length,
+      otherPlayerDials: otherPlayerDials.map((d) => ({
+        id: d.playerId,
+        locked: d.isLocked,
+        pos: d.position,
+      })),
     });
-    
+
     if (allLocked && !allPlayersLocked) {
-      console.log('[ActiveGame] ✅ All players locked in! Transitioning to results...');
+      console.log(
+        "[ActiveGame] ✅ All players locked in! Transitioning to results..."
+      );
       setAllPlayersLocked(true);
-      
+
       // Navigate to results screen after a short delay
       setTimeout(() => {
-        console.log('[ActiveGame] Transitioning to results screen');
-        setCurrentScreen('results');
+        console.log("[ActiveGame] Transitioning to results screen");
+        setCurrentScreen("results");
       }, 1500);
     }
-  }, [otherPlayerDials, isLocked, totalPlayers, allPlayersLocked, setCurrentScreen, isPsychic]);
+  }, [
+    otherPlayerDials,
+    isLocked,
+    totalPlayers,
+    allPlayersLocked,
+    setCurrentScreen,
+    isPsychic,
+  ]);
 
   // Glitch effect for hint text
   useEffect(() => {
@@ -242,31 +287,32 @@ export default function ActiveGameScreen() {
   // Helper function to update dial position in database
   const updateDialPosition = async (position: number, locked: boolean) => {
     try {
-      await supabase
-        .from('dial_updates')
-        .upsert({
+      await supabase.from("dial_updates").upsert(
+        {
           room_id: roomId,
           round_number: round,
           player_id: playerId,
           dial_position: position,
-          is_locked: locked
-        }, {
-          onConflict: 'room_id,round_number,player_id'
-        });
+          is_locked: locked,
+        },
+        {
+          onConflict: "room_id,round_number,player_id",
+        }
+      );
     } catch (err) {
-      console.error('Failed to update dial position:', err);
+      console.error("Failed to update dial position:", err);
     }
   };
 
   const handleLockIn = async () => {
     setIsLocked(true);
-    
+
     try {
       // Update dial position with locked status
       await updateDialPosition(dialPosition, true);
       console.log(`${playerName} locked in guess at ${dialPosition}%`);
     } catch (err) {
-      console.error('Failed to lock position:', err);
+      console.error("Failed to lock position:", err);
       // Revert lock state on error
       setIsLocked(false);
     }
@@ -278,9 +324,16 @@ export default function ActiveGameScreen() {
   // Create gradient for scoring zones
   const createDialGradient = () => {
     const targetAngle = targetPos * 1.8 - 90; // Convert percentage to degrees
-    
-    console.log('[ActiveGame] Creating gradient - isPsychic:', isPsychic, 'targetPos:', targetPos, 'targetAngle:', targetAngle);
-    
+
+    console.log(
+      "[ActiveGame] Creating gradient - isPsychic:",
+      isPsychic,
+      "targetPos:",
+      targetPos,
+      "targetAngle:",
+      targetAngle
+    );
+
     return `conic-gradient(
       from -90deg at 50% 100%,
       rgb(63, 63, 70) 0deg ${targetAngle - 22.5 + 90}deg,
@@ -293,9 +346,32 @@ export default function ActiveGameScreen() {
     )`;
   };
 
+  // Early return after all hooks
+  if (!gameData || !roundData) return null;
+
+  // Extract display values
+  const roomName = gameData.gameSettings.roomName;
+  const maxRounds = gameData.gameSettings.numberOfRounds;
+  const maxLives = gameData.gameSettings.numberOfLives;
+  const score = roundData.gameState.team_score;
+  const lives = roundData.gameState.lives_remaining;
+  const leftConcept = roundData.round.left_concept;
+  const rightConcept = roundData.round.right_concept;
+  const psychicHint = roundData.round.psychic_hint;
+  const targetPosition = roundData.round.target_position;
+  const targetPos = targetPosition ?? 50; // Default to center if not provided
+
+  console.log(
+    "[ActiveGame] Component render - playerId:",
+    gameData.playerId,
+    "psychicId:",
+    roundData.gameState.current_psychic_id,
+    "isPsychic:",
+    isPsychic
+  );
+
   return (
     <div className="min-h-screen bg-zinc-950 relative overflow-hidden">
-      
       {/* Top HUD Bar */}
       <div className="bg-zinc-900 border-b-2 border-zinc-700 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center space-x-6">
@@ -306,17 +382,26 @@ export default function ActiveGameScreen() {
             ROUND {round}/{maxRounds}
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-2">
-            <span className="text-teal-400 font-bold tracking-wide">SCORE:</span>
+            <span className="text-teal-400 font-bold tracking-wide">
+              SCORE:
+            </span>
             <span className="text-white text-xl font-bold">{score}</span>
           </div>
           <div className="flex items-center space-x-2">
-            <span className="text-fuchsia-400 font-bold tracking-wide">LIVES:</span>
+            <span className="text-fuchsia-400 font-bold tracking-wide">
+              LIVES:
+            </span>
             <div className="flex space-x-1">
               {Array.from({ length: maxLives }, (_, i) => (
-                <div key={i} className={`text-xl ${i < lives ? 'text-fuchsia-500' : 'text-zinc-600'}`}>
+                <div
+                  key={i}
+                  className={`text-xl ${
+                    i < lives ? "text-fuchsia-500" : "text-zinc-600"
+                  }`}
+                >
                   ♥
                 </div>
               ))}
@@ -334,14 +419,14 @@ export default function ActiveGameScreen() {
               <div className="text-2xl lg:text-3xl font-bold text-teal-400 tracking-wider uppercase">
                 {leftConcept}
               </div>
-              
+
               {/* Digital Connection Line */}
               <div className="flex-1 mx-8 flex items-center">
                 <div className="flex-1 h-0.5 bg-gradient-to-r from-teal-500 via-zinc-600 to-teal-500"></div>
                 <div className="text-teal-500 mx-4 text-2xl">⟷</div>
                 <div className="flex-1 h-0.5 bg-gradient-to-r from-teal-500 via-zinc-600 to-teal-500"></div>
               </div>
-              
+
               <div className="text-2xl lg:text-3xl font-bold text-teal-400 tracking-wider uppercase">
                 {rightConcept}
               </div>
@@ -353,12 +438,16 @@ export default function ActiveGameScreen() {
             <div className="bg-zinc-900 border-2 border-fuchsia-600 inline-block px-8 py-6 relative overflow-hidden">
               {/* Scanline effect */}
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-fuchsia-500/10 to-transparent opacity-50 animate-pulse"></div>
-              
+
               <div className="text-gray-400 text-sm font-bold tracking-widest uppercase mb-2">
                 PSYCHIC TRANSMISSION
               </div>
-              <div className={`text-3xl lg:text-4xl font-bold text-white tracking-wider transition-all duration-100 ${glitchEffect ? 'animate-pulse text-fuchsia-500' : ''}`}>
-                "{psychicHint}"
+              <div
+                className={`text-3xl lg:text-4xl font-bold text-white tracking-wider transition-all duration-100 ${
+                  glitchEffect ? "animate-pulse text-fuchsia-500" : ""
+                }`}
+              >
+                &ldquo;{psychicHint}&rdquo;
               </div>
             </div>
           </div>
@@ -369,90 +458,112 @@ export default function ActiveGameScreen() {
       <div className="flex-1 flex items-center justify-center py-8">
         <div className="relative w-full max-w-2xl mx-auto">
           {/* Dial Container */}
-          <div 
+          <div
             id="dial-container"
-            className={`relative w-full max-w-[500px] h-[250px] mx-auto select-none ${!isLocked && !isPsychic ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-not-allowed'}`}
+            className={`relative w-full max-w-[500px] h-[250px] mx-auto select-none ${
+              !isLocked && !isPsychic
+                ? isDragging
+                  ? "cursor-grabbing"
+                  : "cursor-grab"
+                : "cursor-not-allowed"
+            }`}
             onMouseDown={isPsychic ? undefined : handleMouseDown}
             onTouchStart={isPsychic ? undefined : handleTouchStart}
-            style={{ touchAction: 'none' }}
+            style={{ touchAction: "none" }}
           >
             {/* Semicircle Board - Gradient for psychic, plain for others */}
-            <div 
+            <div
               className="absolute w-full h-full rounded-t-full overflow-hidden shadow-2xl"
               style={{
                 background: (() => {
-                  const bg = isPsychic ? createDialGradient() : 'rgb(63, 63, 70)';
-                  console.log('[ActiveGame] Applying background - isPsychic:', isPsychic, 'background:', bg);
+                  const bg = isPsychic
+                    ? createDialGradient()
+                    : "rgb(63, 63, 70)";
+                  console.log(
+                    "[ActiveGame] Applying background - isPsychic:",
+                    isPsychic,
+                    "background:",
+                    bg
+                  );
                   return bg;
                 })(),
-                boxShadow: 'inset 0 5px 15px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5)'
+                boxShadow:
+                  "inset 0 5px 15px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5)",
               }}
             >
               {/* Outer border rings */}
-              <div className="absolute inset-0 rounded-t-full border-2 border-zinc-700" 
-                   style={{ borderBottom: 'none' }}></div>
-              <div className="absolute inset-2 rounded-t-full border border-zinc-800" 
-                   style={{ borderBottom: 'none' }}></div>
+              <div
+                className="absolute inset-0 rounded-t-full border-2 border-zinc-700"
+                style={{ borderBottom: "none" }}
+              ></div>
+              <div
+                className="absolute inset-2 rounded-t-full border border-zinc-800"
+                style={{ borderBottom: "none" }}
+              ></div>
             </div>
 
-
-
             {/* Needle Container */}
-            <div 
+            <div
               className="absolute bottom-0 left-1/2 w-10 h-[220px] pointer-events-none"
-              style={{ transform: 'translateX(-50%)' }}
+              style={{ transform: "translateX(-50%)" }}
             >
               {/* Needle */}
               <div
-                className={`absolute bottom-0 left-1/2 w-1.5 h-[200px] rounded-t-full transition-all duration-100 ${isDragging ? 'animate-pulse' : ''}`}
+                className={`absolute bottom-0 left-1/2 w-1.5 h-[200px] rounded-t-full transition-all duration-100 ${
+                  isDragging ? "animate-pulse" : ""
+                }`}
                 style={{
-                  background: isDragging ? 'rgb(255, 20, 147)' : 'rgb(236, 72, 153)',
-                  transformOrigin: 'bottom center',
+                  background: isDragging
+                    ? "rgb(255, 20, 147)"
+                    : "rgb(236, 72, 153)",
+                  transformOrigin: "bottom center",
                   transform: `translateX(-50%) rotate(${needleAngle}deg)`,
-                  boxShadow: isDragging 
-                    ? '0 0 20px rgba(255, 20, 147, 0.8), 0 0 40px rgba(255, 20, 147, 0.4)' 
-                    : '0 0 15px rgba(236, 72, 153, 0.8), 0 0 30px rgba(236, 72, 153, 0.4)',
-                  filter: isDragging 
-                    ? 'drop-shadow(0 0 8px rgb(255, 20, 147))' 
-                    : 'drop-shadow(0 0 6px rgb(236, 72, 153))'
+                  boxShadow: isDragging
+                    ? "0 0 20px rgba(255, 20, 147, 0.8), 0 0 40px rgba(255, 20, 147, 0.4)"
+                    : "0 0 15px rgba(236, 72, 153, 0.8), 0 0 30px rgba(236, 72, 153, 0.4)",
+                  filter: isDragging
+                    ? "drop-shadow(0 0 8px rgb(255, 20, 147))"
+                    : "drop-shadow(0 0 6px rgb(236, 72, 153))",
                 }}
               />
 
               {/* Pivot Point */}
-              <div 
+              <div
                 className="absolute bottom-0 left-1/2 transform -translate-x-1/2 pointer-events-auto"
-                style={{ cursor: !isLocked ? 'grab' : 'not-allowed' }}
+                style={{ cursor: !isLocked ? "grab" : "not-allowed" }}
               >
                 {/* Enlarged hit area */}
                 <div className="absolute w-12 h-12 -translate-x-1/2 -translate-y-1/2 rounded-full"></div>
-                
+
                 {/* Outer ring */}
-                <div 
+                <div
                   className={`w-8 h-8 rounded-full border-2 transition-all duration-200 -translate-x-1/2 -translate-y-1/2 absolute`}
                   style={{
-                    backgroundColor: 'rgb(39, 39, 42)',
-                    borderColor: isDragging ? 'rgb(255, 20, 147)' : 'rgb(236, 72, 153)',
+                    backgroundColor: "rgb(39, 39, 42)",
+                    borderColor: isDragging
+                      ? "rgb(255, 20, 147)"
+                      : "rgb(236, 72, 153)",
                     boxShadow: isDragging
-                      ? '0 0 20px rgba(255, 20, 147, 0.8)'
-                      : '0 0 15px rgba(236, 72, 153, 0.6)'
+                      ? "0 0 20px rgba(255, 20, 147, 0.8)"
+                      : "0 0 15px rgba(236, 72, 153, 0.6)",
                   }}
                 />
-                
+
                 {/* Inner circle */}
-                <div 
+                <div
                   className="w-4 h-4 rounded-full transition-all duration-200 -translate-x-1/2 -translate-y-1/2 absolute"
                   style={{
-                    backgroundColor: isDragging ? 'rgb(255, 20, 147)' : 'rgb(236, 72, 153)',
-                    boxShadow: '0 0 10px rgba(236, 72, 153, 1)'
+                    backgroundColor: isDragging
+                      ? "rgb(255, 20, 147)"
+                      : "rgb(236, 72, 153)",
+                    boxShadow: "0 0 10px rgba(236, 72, 153, 1)",
                   }}
                 />
-                
+
                 {/* Center dot */}
                 <div className="w-1.5 h-1.5 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 absolute"></div>
               </div>
             </div>
-
-
           </div>
 
           {/* Spectrum Extremes Labels */}
@@ -468,13 +579,23 @@ export default function ActiveGameScreen() {
           {/* Current Position Indicator with Score Zone Info */}
           <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-20">
             <div className="text-center">
-              <div className={`text-2xl font-bold tracking-wider mb-1 transition-all duration-200 ${isDragging ? 'text-pink-400 scale-110' : 'text-fuchsia-500'}`}>
+              <div
+                className={`text-2xl font-bold tracking-wider mb-1 transition-all duration-200 ${
+                  isDragging ? "text-pink-400 scale-110" : "text-fuchsia-500"
+                }`}
+              >
                 {Math.round(dialPosition)}%
               </div>
               <div className="text-gray-400 text-sm uppercase tracking-wide mb-2">
-                {isLocked ? 'LOCKED GUESS' : isDragging ? '⟷ DRAGGING ⟷' : isPsychic ? 'WATCHING' : 'CURRENT GUESS'}
+                {isLocked
+                  ? "LOCKED GUESS"
+                  : isDragging
+                  ? "⟷ DRAGGING ⟷"
+                  : isPsychic
+                  ? "WATCHING"
+                  : "CURRENT GUESS"}
               </div>
-              
+
               {!isLocked && !isPsychic && (
                 <div className="text-xs text-teal-400 mt-2 uppercase tracking-wide">
                   Click and drag to adjust
@@ -494,13 +615,18 @@ export default function ActiveGameScreen() {
             className={`
               w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest
               transition-all duration-300 border-2 relative overflow-hidden
-              ${isLocked || isPsychic
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 border-fuchsia-500 text-white hover:from-fuchsia-500 hover:to-fuchsia-600 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer'
+              ${
+                isLocked || isPsychic
+                  ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 border-fuchsia-500 text-white hover:from-fuchsia-500 hover:to-fuchsia-600 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer"
               }
             `}
           >
-            {isPsychic ? 'PSYCHIC - WAITING FOR PLAYERS' : isLocked ? 'GUESS LOCKED IN' : 'LOCK IN GUESS'}
+            {isPsychic
+              ? "PSYCHIC - WAITING FOR PLAYERS"
+              : isLocked
+              ? "GUESS LOCKED IN"
+              : "LOCK IN GUESS"}
             {!isLocked && !isPsychic && (
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
             )}
@@ -520,15 +646,22 @@ export default function ActiveGameScreen() {
                 key={player.id}
                 className={`
                   flex items-center space-x-2 px-3 py-2 border-2 bg-zinc-800
-                  ${player.isPsychic 
-                    ? 'border-teal-500 text-teal-400 shadow-[0_0_10px_rgba(20,184,166,0.3)]' 
-                    : 'border-zinc-600 text-white'
+                  ${
+                    player.isPsychic
+                      ? "border-teal-500 text-teal-400 shadow-[0_0_10px_rgba(20,184,166,0.3)]"
+                      : "border-zinc-600 text-white"
                   }
                 `}
               >
-                <div className={`w-2 h-2 rounded-full ${player.isPsychic ? 'bg-teal-400' : 'bg-zinc-500'}`}></div>
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    player.isPsychic ? "bg-teal-400" : "bg-zinc-500"
+                  }`}
+                ></div>
                 <span className="text-sm font-medium">{player.name}</span>
-                {player.isPsychic && <span className="text-xs uppercase">(PSYCHIC)</span>}
+                {player.isPsychic && (
+                  <span className="text-xs uppercase">(PSYCHIC)</span>
+                )}
               </div>
             ))}
           </div>
@@ -538,7 +671,7 @@ export default function ActiveGameScreen() {
       {/* Back button for testing */}
       <div className="absolute top-20 left-4">
         <button
-          onClick={() => setCurrentScreen('lobby')}
+          onClick={() => setCurrentScreen("lobby")}
           className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
         >
           ← BACK

@@ -15,10 +15,11 @@ export async function GET(request: NextRequest) {
 
     const players = await getPlayers(roomId);
     return NextResponse.json({ success: true, players });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch players';
     console.error('Error fetching players:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch players' },
+      { error: message },
       { status: 500 }
     );
   }
@@ -67,10 +68,11 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to handle player action';
     console.error('Error handling player action:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to handle player action' },
+      { error: message },
       { status: 500 }
     );
   }

@@ -129,10 +129,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       
       console.log(`${playerName} created game "${roomName}" with code ${result.room.room_code}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create game. Please try again.';
       console.error('Failed to create game:', err);
       set({ 
-        error: err.message || 'Failed to create game. Please try again.',
+        error: message,
         isLoading: false 
       });
       throw err;
@@ -166,10 +167,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       
       console.log(`${playerName} joined game with code ${result.room.room_code}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to join game. Please check the room code.';
       console.error('Failed to join game:', err);
       set({ 
-        error: err.message || 'Failed to join game. Please check the room code.',
+        error: message,
         isLoading: false 
       });
       throw err;
@@ -196,10 +198,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         currentScreen: 'game',
         isLoading: false
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to start game.';
       console.error('[HOST] Failed to start game:', err);
       set({ 
-        error: err.message || 'Failed to start game.',
+        error: message,
         isLoading: false 
       });
       throw err;
@@ -217,9 +220,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     try {
       const result = await api.assignRandomPsychic(gameData.roomId);
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to assign psychic.';
       console.error('Failed to assign psychic:', err);
-      set({ error: err.message || 'Failed to assign psychic.' });
+      set({ error: message });
       return null;
     }
   },

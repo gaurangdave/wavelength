@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       .eq('room_id', roomId);
 
     // Start the game
-    const gameState = await startGame(roomId, lives);
+    await startGame(roomId, lives);
 
     // Make sure psychic is assigned
     if (psychicId) {
@@ -124,10 +124,11 @@ export async function POST(request: NextRequest) {
       gameState: updatedGameState,
       round
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to start game';
     console.error('Error starting game:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to start game' },
+      { error: message },
       { status: 500 }
     );
   }
