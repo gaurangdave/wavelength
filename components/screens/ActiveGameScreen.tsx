@@ -317,20 +317,24 @@ export default function ActiveGameScreen({
 
   // Check if all players have locked in
   useEffect(() => {
-    console.log('[ActiveGame] Checking lock status. totalPlayers:', totalPlayers, 'isLocked:', isLocked, 'otherPlayerDials:', otherPlayerDials);
+    console.log('[ActiveGame] Checking lock status. totalPlayers:', totalPlayers, 'isPsychic:', isPsychic, 'isLocked:', isLocked, 'otherPlayerDials:', otherPlayerDials);
     
     if (totalPlayers === 0) {
       console.log('[ActiveGame] Waiting for player count...');
       return;
     }
     
-    const lockedCount = otherPlayerDials.filter(d => d.isLocked).length + (isLocked ? 1 : 0);
-    const allLocked = lockedCount === totalPlayers;
+    // Psychic doesn't lock in, so subtract 1 from total
+    const nonPsychicPlayerCount = totalPlayers - 1;
+    const lockedCount = otherPlayerDials.filter(d => d.isLocked).length + (isLocked && !isPsychic ? 1 : 0);
+    const allLocked = lockedCount === nonPsychicPlayerCount;
     
     console.log('[ActiveGame] Lock status:', { 
       lockedCount, 
-      totalPlayers, 
+      totalPlayers,
+      nonPsychicPlayerCount,
       allLocked,
+      isPsychic,
       myLockStatus: isLocked,
       otherPlayersLocked: otherPlayerDials.filter(d => d.isLocked).length,
       otherPlayerDials: otherPlayerDials.map(d => ({ id: d.playerId, locked: d.isLocked, pos: d.position }))
@@ -492,12 +496,12 @@ export default function ActiveGameScreen({
           {/* Dial Container */}
           <div 
             id="dial-container"
-            className={`relative w-full max-w-[500px] h-[250px] mx-auto select-none ${!isLocked ? 'cursor-pointer' : 'cursor-not-allowed'} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-            onMouseDown={handleMouseDown}
-            onTouchStart={handleTouchStart}
+            className={`relative w-full max-w-[500px] h-[250px] mx-auto select-none ${!isLocked && !isPsychic ? 'cursor-pointer' : 'cursor-not-allowed'} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+            onMouseDown={isPsychic ? undefined : handleMouseDown}
+            onTouchStart={isPsychic ? undefined : handleTouchStart}
             style={{ touchAction: 'none' }}
           >
-            {/* Semicircle Board with Scoring Zones */}
+            {/* Semicircle Board - Gradient for psychic, plain for others */}
             <div 
               className="absolute w-full h-full rounded-t-full overflow-hidden shadow-2xl"
               style={{
@@ -510,31 +514,6 @@ export default function ActiveGameScreen({
                    style={{ borderBottom: 'none' }}></div>
               <div className="absolute inset-2 rounded-t-full border border-zinc-800" 
                    style={{ borderBottom: 'none' }}></div>
-              
-              {/* Other players' dial indicators */}
-              {otherPlayerDials.map((otherDial) => {
-                const otherNeedleAngle = -90 + (otherDial.position / 100) * 180;
-                return (
-                  <div
-                    key={otherDial.playerId}
-                    className="absolute bottom-0 left-1/2 w-8 h-[200px] pointer-events-none"
-                    style={{ transform: 'translateX(-50%)' }}
-                  >
-                    {/* Other player's needle */}
-                    <div
-                      className="absolute bottom-0 left-1/2 w-1 h-[180px] rounded-t-full opacity-60"
-                      style={{
-                        background: otherDial.isLocked ? 'rgb(34, 197, 94)' : 'rgb(99, 102, 241)',
-                        transformOrigin: 'bottom center',
-                        transform: `translateX(-50%) rotate(${otherNeedleAngle}deg)`,
-                        boxShadow: otherDial.isLocked 
-                          ? '0 0 10px rgba(34, 197, 94, 0.6)' 
-                          : '0 0 10px rgba(99, 102, 241, 0.4)'
-                      }}
-                    />
-                  </div>
-                );
-              })}
             </div>
 
 
@@ -614,29 +593,10 @@ export default function ActiveGameScreen({
                 {Math.round(dialPosition)}%
               </div>
               <div className="text-gray-400 text-sm uppercase tracking-wide mb-2">
-                {isLocked ? 'LOCKED GUESS' : isDragging ? '⟷ DRAGGING ⟷' : 'CURRENT GUESS'}
+                {isLocked ? 'LOCKED GUESS' : isDragging ? '⟷ DRAGGING ⟷' : isPsychic ? 'WATCHING' : 'CURRENT GUESS'}
               </div>
               
-              {/* Show what score zone the needle is in (psychic only) */}
-              {isPsychic && (
-                <div className="text-xs text-zinc-300">
-                  {(() => {
-                    const currentZone = scoringZones.find(zone => 
-                      dialPosition >= zone.start && dialPosition <= zone.start + zone.width
-                    );
-                    if (currentZone) {
-                      return (
-                        <span style={{ color: currentZone.color }} className="font-bold">
-                          {currentZone.label} ({currentZone.points} PTS)
-                        </span>
-                      );
-                    }
-                    return <span className="text-zinc-500">NO SCORE</span>;
-                  })()}
-                </div>
-              )}
-              
-              {!isLocked && (
+              {!isLocked && !isPsychic && (
                 <div className="text-xs text-teal-400 mt-2 uppercase tracking-wide">
                   Click and drag to adjust
                 </div>
@@ -651,18 +611,18 @@ export default function ActiveGameScreen({
         <div className="max-w-2xl mx-auto">
           <button
             onClick={handleLockIn}
-            disabled={isLocked}
+            disabled={isLocked || isPsychic}
             className={`
               w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest
               transition-all duration-300 border-2 relative overflow-hidden
-              ${isLocked
+              ${isLocked || isPsychic
                 ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
                 : 'bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 border-fuchsia-500 text-white hover:from-fuchsia-500 hover:to-fuchsia-600 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer'
               }
             `}
           >
-            {isLocked ? 'GUESS LOCKED IN' : 'LOCK IN GUESS'}
-            {!isLocked && (
+            {isPsychic ? 'PSYCHIC - WAITING FOR PLAYERS' : isLocked ? 'GUESS LOCKED IN' : 'LOCK IN GUESS'}
+            {!isLocked && !isPsychic && (
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
             )}
           </button>
