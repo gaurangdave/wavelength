@@ -41,6 +41,7 @@ interface GameStore {
   currentScreen: Screen;
   playerName: string;
   userId: string | null;
+  roomCode: string | null;
   gameData: GameData | null;
   roundData: RoundData | null;
   isHost: boolean;
@@ -50,6 +51,7 @@ interface GameStore {
   // Basic setters
   setCurrentScreen: (screen: Screen) => void;
   setPlayerName: (name: string) => void;
+  setRoomCode: (code: string) => void;
   setError: (error: string | null) => void;
   
   // Player registration
@@ -91,6 +93,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
   currentScreen: 'welcome',
   playerName: '',
   userId: null,
+  roomCode: null,
   gameData: null,
   roundData: null,
   isHost: false,
@@ -103,6 +106,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     set({ playerName: name, currentScreen: 'main-menu' });
     console.log(`Player ${name} is ready to choose their path!`);
   },
+  setRoomCode: (code) => set({ roomCode: code }),
   setError: (error) => set({ error }),
 
   // Player Registration
@@ -160,6 +164,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             ...settings
           }
         },
+        roomCode: result.room.room_code,
         isHost: true,
         currentScreen: 'lobby',
         isLoading: false
@@ -198,6 +203,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
           peerId: result.player.peer_id,
           gameSettings: result.room.settings
         },
+        roomCode: result.room.room_code,
         isHost: false,
         currentScreen: 'lobby',
         isLoading: false
@@ -333,7 +339,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
   // Navigation Actions
   resetGame: () => 
     set({ 
-      gameData: null, 
+      gameData: null,
+      roomCode: null,
       roundData: null, 
       isHost: false,
       error: null
@@ -342,7 +349,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
   backToMenu: () => 
     set({ 
       currentScreen: 'main-menu', 
-      gameData: null, 
+      gameData: null,
+      roomCode: null,
       roundData: null, 
       isHost: false,
       error: null

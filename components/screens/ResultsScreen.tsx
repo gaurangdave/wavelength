@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/lib/store';
 import { createDialGradient } from '@/lib/theme';
@@ -188,10 +189,11 @@ function PlayerScoresTable({ playerGuesses, loading }: PlayerScoresProps) {
 }
 
 export default function ResultsScreen() {
+  const router = useRouter();
   const { 
     gameData, 
     roundData,
-    setCurrentScreen
+    roomCode: storeRoomCode
   } = useGameStore();
   
   const [playerGuesses, setPlayerGuesses] = useState<PlayerGuess[]>([]);
@@ -199,8 +201,18 @@ export default function ResultsScreen() {
 
   const handleNextRound = () => {
     console.log('Next round clicked');
-    // TODO: Start next round logic
-    setCurrentScreen('game');
+    // TODO: Start next round logic - navigate back to play screen
+    const roomCodeToUse = gameData?.roomCode || storeRoomCode;
+    if (roomCodeToUse) {
+      router.push(`/room/${roomCodeToUse}/play`);
+    }
+  };
+
+  const handleBackToLobby = () => {
+    const roomCodeToUse = gameData?.roomCode || storeRoomCode;
+    if (roomCodeToUse) {
+      router.push(`/room/${roomCodeToUse}`);
+    }
   };
 
   // Fetch all player guesses
@@ -365,7 +377,7 @@ export default function ResultsScreen() {
       {/* Back button for testing */}
       <div className="absolute top-20 left-4">
         <button
-          onClick={() => setCurrentScreen('lobby')}
+          onClick={handleBackToLobby}
           className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
         >
           ← BACK

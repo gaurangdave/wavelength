@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/lib/store";
 import { useDialUpdates, useRoundUpdates } from "@/lib/hooks/useRealtimeSubscriptions";
@@ -165,7 +166,8 @@ function DialPositionIndicator({ dialPosition, isDragging, isLocked, isPsychic, 
 }
 
 export default function ActiveGameScreen() {
-  const { gameData, roundData, playerName, setCurrentScreen, updateTargetPosition } = useGameStore();
+  const router = useRouter();
+  const { gameData, roundData, roomCode: storeRoomCode, playerName, updateTargetPosition } = useGameStore();
 
   const [dialPosition, setDialPosition] = useState(50); // Current needle position - now dynamic
   const [isDragging, setIsDragging] = useState(false);
@@ -418,9 +420,12 @@ export default function ActiveGameScreen() {
       setAllPlayersLocked(true);
 
       // Navigate to results screen after a short delay for all players including psychic
+      const roomCodeToUse = gameData?.roomCode || storeRoomCode;
       setTimeout(() => {
         console.log("[ActiveGame] Transitioning to results screen");
-        setCurrentScreen("results");
+        if (roomCodeToUse) {
+          router.push(`/room/${roomCodeToUse}/results`);
+        }
       }, 2000); // Increased delay to 2s so players can see the gradient reveal
     }
   }, [
@@ -428,7 +433,9 @@ export default function ActiveGameScreen() {
     isLocked,
     totalPlayers,
     allPlayersLocked,
-    setCurrentScreen,
+    gameData,
+    storeRoomCode,
+    router,
     isPsychic,
   ]);
 
@@ -771,7 +778,10 @@ export default function ActiveGameScreen() {
       {/* Back button for testing */}
       <div className="absolute top-20 left-4">
         <button
-          onClick={() => setCurrentScreen("lobby")}
+          onClick={() => {
+            const roomCodeToUse = gameData?.roomCode || storeRoomCode;
+            if (roomCodeToUse) router.push(`/room/${roomCodeToUse}`);
+          }}
           className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
         >
           ← BACK

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/store';
 import { useGameRoomStatusUpdates, usePlayerListUpdates } from '@/lib/hooks/useRealtimeSubscriptions';
 import {
@@ -96,13 +97,15 @@ function PlayerCard({ player }: PlayerCardProps) {
 }
 
 export default function GameWaitingRoom() {
+  const router = useRouter();
   const { 
     gameData,
+    roomCode: storeRoomCode,
+    roundData,
     isHost,
     isLoading,
     assignRandomPsychic,
-    startGame,
-    backToMenu
+    startGame
   } = useGameStore();
   
   const [players, setPlayers] = useState<Player[]>([]);
@@ -119,6 +122,14 @@ export default function GameWaitingRoom() {
   const roomCode = gameData?.roomCode;
   const playerId = gameData?.playerId;
   const roomName = gameData?.gameSettings?.roomName;
+
+  // Navigate to play screen when round data is available (game started)
+  useEffect(() => {
+    if (roundData && roomCode) {
+      console.log('[GameWaitingRoom] Game started, navigating to play screen');
+      router.push(`/room/${roomCode}/play`);
+    }
+  }, [roundData, roomCode, router]);
 
   // Subscribe to game room status changes via custom hook
   useGameRoomStatusUpdates(roomId, isHost);
@@ -160,7 +171,17 @@ export default function GameWaitingRoom() {
     if (isGameReady && selectedPsychic && !isLoading) {
       console.log('[HOST] Starting game...');
       await startGame();
+      
+      // Navigate to play screen
+      const roomCodeToUse = roomCode || storeRoomCode;
+      if (roomCodeToUse) {
+        router.push(`/room/${roomCodeToUse}/play`);
+      }
     }
+  };
+
+  const handleBackToMenu = () => {
+    router.push('/dashboard');
   };
   
   // Early return if no game data
@@ -260,7 +281,7 @@ export default function GameWaitingRoom() {
           
           {/* Back Button */}
           <Button
-            onClick={backToMenu}
+            onClick={handleBackToMenu}
             variant="secondary"
             size="medium"
             fullWidth

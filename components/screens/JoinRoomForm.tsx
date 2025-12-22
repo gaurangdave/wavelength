@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/store';
 import {
   ScreenContainer,
@@ -44,9 +45,9 @@ function RoomCodeDisplay({ code }: RoomCodeDisplayProps) {
 }
 
 export default function JoinRoomForm() {
+  const router = useRouter();
   const playerName = useGameStore(state => state.playerName);
   const joinGame = useGameStore(state => state.joinGame);
-  const backToMenu = useGameStore(state => state.backToMenu);
   const isLoading = useGameStore(state => state.isLoading);
   const storeError = useGameStore(state => state.error);
   
@@ -79,10 +80,17 @@ export default function JoinRoomForm() {
           roomCode,
           playerName
         });
+        
+        // Navigate to room after successful join
+        router.push(`/room/${roomCode}`);
       } catch {
         // Error is handled in the store
       }
     }
+  };
+
+  const handleBackToMenu = () => {
+    router.push('/dashboard');
   };
 
   const isFormValid = roomCode.length === 6;
@@ -164,7 +172,7 @@ export default function JoinRoomForm() {
               
               <Button
                 type="button"
-                onClick={backToMenu}
+                onClick={handleBackToMenu}
                 disabled={isLoading}
                 variant="secondary"
                 size="medium"

@@ -1,15 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/store';
 import { ScreenContainer, GeometricBackground, CornerAccents } from '@/components/ui/GameComponents';
 import { themeClasses } from '@/lib/theme';
 
 export default function MainMenuScreen() {
+  const router = useRouter();
   const playerName = useGameStore(state => state.playerName);
-  const goToCreateRoom = useGameStore(state => state.goToCreateRoom);
-  const goToJoinRoom = useGameStore(state => state.goToJoinRoom);
   const [hoveredCard, setHoveredCard] = useState<'create' | 'join' | null>(null);
+
+  const handleCreateRoom = () => {
+    console.log(`${playerName} chose to create a room`);
+    router.push('/create');
+  };
+
+  const handleJoinRoom = () => {
+    console.log(`${playerName} chose to join a room`);
+    router.push('/join');
+  };
 
   return (
     <ScreenContainer className="flex items-center justify-center px-4">
@@ -33,7 +43,7 @@ export default function MainMenuScreen() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Create Room Card */}
           <div
-            onClick={goToCreateRoom}
+            onClick={handleCreateRoom}
             onMouseEnter={() => setHoveredCard('create')}
             onMouseLeave={() => setHoveredCard(null)}
             className={`
@@ -83,7 +93,7 @@ export default function MainMenuScreen() {
 
           {/* Join Room Card */}
           <div
-            onClick={goToJoinRoom}
+            onClick={handleJoinRoom}
             onMouseEnter={() => setHoveredCard('join')}
             onMouseLeave={() => setHoveredCard(null)}
             className={`

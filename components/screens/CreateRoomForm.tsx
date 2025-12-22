@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore, type GameSettings } from '@/lib/store';
 import { 
   ScreenContainer, 
@@ -16,9 +17,9 @@ import {
 import { themeClasses } from '@/lib/theme';
 
 export default function CreateRoomForm() {
+  const router = useRouter();
   const playerName = useGameStore(state => state.playerName);
   const createGame = useGameStore(state => state.createGame);
-  const backToMenu = useGameStore(state => state.backToMenu);
   const isLoading = useGameStore(state => state.isLoading);
   const error = useGameStore(state => state.error);
   
@@ -67,10 +68,20 @@ export default function CreateRoomForm() {
             maxPoints: gameSettings.maxPoints
           }
         });
+        
+        // Navigate to room after successful creation
+        const { roomCode } = useGameStore.getState();
+        if (roomCode) {
+          router.push(`/room/${roomCode}`);
+        }
       } catch {
         // Error is handled in the store
       }
     }
+  };
+
+  const handleBackToMenu = () => {
+    router.push('/dashboard');
   };
 
   const isFormValid = gameSettings.roomName.trim().length > 0;
@@ -220,7 +231,7 @@ export default function CreateRoomForm() {
               
               <button
                 type="button"
-                onClick={backToMenu}
+                onClick={handleBackToMenu}
                 className="w-full py-3 px-6 text-lg font-medium text-zinc-400 uppercase tracking-widest border-2 border-zinc-700 hover:border-zinc-600 hover:text-zinc-300 transition-all duration-300"
               >
                 ← BACK TO MENU
