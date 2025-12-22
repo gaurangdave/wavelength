@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { getPlayers } from '@/lib/api-client';
+import { useState, useMemo, useCallback } from 'react';
 import { useGameStore } from '@/lib/store';
-import { useGameRoomStatusUpdates } from '@/lib/hooks/useRealtimeSubscriptions';
+import { useGameRoomStatusUpdates, usePlayerListUpdates } from '@/lib/hooks/useRealtimeSubscriptions';
 import {
   ScreenContainer,
   GeometricBackground,
@@ -124,37 +123,26 @@ export default function GameWaitingRoom() {
   // Subscribe to game room status changes via custom hook
   useGameRoomStatusUpdates(roomId, isHost);
 
-  // Fetch players from database
-  useEffect(() => {
-    if (!roomId || !playerId) return;
+  // Handle player list updates from realtime subscription
+  const handlePlayersUpdate = useCallback((fetchedPlayers: FetchedPlayer[]) => {
+    setPlayers(fetchedPlayers.map((p) => ({
+      id: p.id,
+      name: p.player_name,
+      isHost: p.is_host,
+      isYou: p.id === playerId,
+      isConnected: p.is_connected,
+      isPsychic: p.is_psychic
+    })));
     
-    const fetchPlayers = async () => {
-      try {
-        const fetchedPlayers = await getPlayers(roomId) as FetchedPlayer[];
-        setPlayers(fetchedPlayers.map((p) => ({
-          id: p.id,
-          name: p.player_name,
-          isHost: p.is_host,
-          isYou: p.id === playerId,
-          isConnected: p.is_connected,
-          isPsychic: p.is_psychic
-        })));
-        
-        // Check if psychic is already assigned
-        const psychic = fetchedPlayers.find((p) => p.is_psychic);
-        if (psychic) {
-          setSelectedPsychic(psychic.id);
-        }
-      } catch (err) {
-        console.error('Failed to fetch players:', err);
-      }
-    };
+    // Check if psychic is already assigned
+    const psychic = fetchedPlayers.find((p) => p.is_psychic);
+    if (psychic) {
+      setSelectedPsychic(psychic.id);
+    }
+  }, [playerId]);
 
-    fetchPlayers();
-    // Poll for updates every 2 seconds
-    const interval = setInterval(fetchPlayers, 2000);
-    return () => clearInterval(interval);
-  }, [roomId, playerId]);
+  // Subscribe to player list updates via custom hook
+  usePlayerListUpdates(roomId, handlePlayersUpdate);
 
   const handleAssignPsychic = async () => {
     const result = await assignRandomPsychic();

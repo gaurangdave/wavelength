@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/lib/store";
-import { useDialUpdates } from "@/lib/hooks/useRealtimeSubscriptions";
+import { useDialUpdates, useRoundUpdates } from "@/lib/hooks/useRealtimeSubscriptions";
 import {
   ConceptPair,
   PsychicHint
@@ -441,35 +441,21 @@ export default function ActiveGameScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Monitor target position changes (for non-psychic players waiting)
-  useEffect(() => {
-    if (!roomId || !round || isPsychic) return;
-    
-    const checkTargetSet = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('rounds')
-          .select('target_position')
-          .eq('room_id', roomId)
-          .eq('round_number', round)
-          .single();
-        
-        if (error) throw error;
-        
-        if (data.target_position !== null && data.target_position !== undefined) {
-          setTargetSet(true);
-          // Update the store with the target position
-          updateTargetPosition(data.target_position);
-        }
-      } catch (err) {
-        console.error('Failed to check target position:', err);
-      }
-    };
-    
-    checkTargetSet();
-    const interval = setInterval(checkTargetSet, 2000);
-    return () => clearInterval(interval);
-  }, [roomId, round, isPsychic, updateTargetPosition]);
+  // Monitor target position changes (for non-psychic players waiting) via realtime
+  const handleRoundUpdate = useCallback((roundData: {target_position: number | null}) => {
+    if (roundData.target_position !== null && roundData.target_position !== undefined) {
+      setTargetSet(true);
+      // Update the store with the target position
+      updateTargetPosition(roundData.target_position);
+    }
+  }, [updateTargetPosition]);
+
+  // Subscribe to round updates only for non-psychic players
+  useRoundUpdates(
+    !isPsychic ? roomId : undefined,
+    !isPsychic ? round : undefined,
+    handleRoundUpdate
+  );
 
   // Helper function to update dial position in database
   const updateDialPosition = async (position: number, locked: boolean) => {
