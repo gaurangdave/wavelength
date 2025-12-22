@@ -1,5 +1,15 @@
 // Utility functions for making API calls to the game backend
 
+export interface RegisterPlayerRequest {
+  playerName: string;
+}
+
+export interface RegisterPlayerResponse {
+  success: boolean;
+  userId: string;
+  playerName: string;
+}
+
 export interface CreateGameRequest {
   roomName: string;
   roomCode: string;
@@ -32,6 +42,21 @@ export interface RoundAction {
 export interface PlayerAction {
   action: 'assign-psychic' | 'update-connection';
   [key: string]: unknown;
+}
+
+export async function registerPlayer(playerName: string): Promise<RegisterPlayerResponse> {
+  const response = await fetch('/api/player/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ playerName })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to register player');
+  }
+
+  return response.json();
 }
 
 export async function createGame(data: CreateGameRequest) {

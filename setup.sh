@@ -18,7 +18,7 @@ supabase start
 
 # Run migrations
 echo "📊 Running database migrations..."
-supabase db reset
+supabase supabase db reset
 
 echo ""
 echo "✅ Setup complete!"

@@ -13,14 +13,19 @@ import {
 import { themeClasses } from '@/lib/theme';
 
 export default function WelcomeScreen() {
-  const setPlayerName = useGameStore(state => state.setPlayerName);
+  const { registerPlayer, isLoading, error } = useGameStore();
   const [playerNameInput, setPlayerNameInput] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (playerNameInput.trim()) {
-      setPlayerName(playerNameInput.trim());
+      try {
+        await registerPlayer(playerNameInput.trim());
+      } catch (err) {
+        console.error('Failed to register:', err);
+        // Error is handled in store
+      }
     }
   };
 
@@ -53,14 +58,21 @@ export default function WelcomeScreen() {
             <Button
               type="submit"
               variant="primary"
-              disabled={!playerNameInput.trim()}
+              disabled={!playerNameInput.trim() || isLoading}
             >
-              NEXT
+              {isLoading ? 'REGISTERING...' : 'NEXT'}
             </Button>
           </form>
 
+          {/* Error Message */}
+          {error && (
+            <div className="text-red-500 text-sm font-medium">
+              {error}
+            </div>
+          )}
+
           {/* Status Indicator */}
-          {playerNameInput.length > 0 && (
+          {playerNameInput.length > 0 && !error && (
             <StatusIndicator type="waiting" text="READY TO PROCEED" />
           )}
         </div>

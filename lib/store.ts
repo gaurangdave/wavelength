@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import * as api from './api-client';
 
 export type Screen = 'welcome' | 'main-menu' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'results';
@@ -39,6 +40,7 @@ interface GameStore {
   // State
   currentScreen: Screen;
   playerName: string;
+  userId: string | null;
   gameData: GameData | null;
   roundData: RoundData | null;
   isHost: boolean;
@@ -49,6 +51,9 @@ interface GameStore {
   setCurrentScreen: (screen: Screen) => void;
   setPlayerName: (name: string) => void;
   setError: (error: string | null) => void;
+  
+  // Player registration
+  registerPlayer: (playerName: string) => Promise<void>;
   
   // API Actions (handle API calls + state updates)
   createGame: (params: {
@@ -81,10 +86,11 @@ interface GameStore {
   goToJoinRoom: () => void;
 }
 
-export const useGameStore = create<GameStore>((set, get) => ({
+export const useGameStore = create<GameStore>()(persist((set, get) => ({
   // Initial State
   currentScreen: 'welcome',
   playerName: '',
+  userId: null,
   gameData: null,
   roundData: null,
   isHost: false,
@@ -98,6 +104,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     console.log(`Player ${name} is ready to choose their path!`);
   },
   setError: (error) => set({ error }),
+
+  // Player Registration
+  registerPlayer: async (playerName: string) => {
+    set({ isLoading: true, error: null });
+    
+    try {
+      console.log('[Store] Registering player:', playerName);
+      const result = await api.registerPlayer(playerName);
+      
+      set({ 
+        userId: result.userId,
+        playerName: result.playerName,
+        currentScreen: 'main-menu',
+        isLoading: false 
+      });
+      
+      console.log('[Store] Player registered successfully:', result);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to register player';
+      console.error('[Store] Failed to register player:', err);
+      set({ 
+        error: message,
+        isLoading: false 
+      });
+      throw err;
+    }
+  },
 
   // API Actions
   createGame: async (params) => {
@@ -326,4 +359,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ currentScreen: 'join-room' });
     console.log(`${playerName} chose to join a room`);
   },
+}), {
+  name: 'wavelength-storage',
+  partialize: (state) => ({
+    userId: state.userId,
+    playerName: state.playerName,
+  }),
 }));
+
+// Initialize: Check if user exists and skip welcome screen
+if (typeof window !== 'undefined') {
+  const state = useGameStore.getState();
+  if (state.userId && state.playerName) {
+    console.log('[Store] User already registered:', state.userId, state.playerName);
+    useGameStore.setState({ currentScreen: 'main-menu' });
+  }
+}
