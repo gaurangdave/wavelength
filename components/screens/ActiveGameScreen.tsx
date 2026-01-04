@@ -131,7 +131,7 @@ interface DialPositionIndicatorProps {
 function DialPositionIndicator({ dialPosition, isDragging, isLocked, isPsychic, targetSet }: DialPositionIndicatorProps) {
   const getStatusText = () => {
     if (isPsychic) {
-      if (isLocked) return "TARGET SET";
+      if (targetSet) return "TARGET SET";
       if (isDragging) return "⟷ SETTING TARGET ⟷";
       return "SETTING TARGET";
     } else {
@@ -156,7 +156,7 @@ function DialPositionIndicator({ dialPosition, isDragging, isLocked, isPsychic, 
           {getStatusText()}
         </div>
 
-        {!isLocked && ((isPsychic && !targetSet) || (!isPsychic && targetSet)) && (
+        {((isPsychic && !targetSet) || (!isPsychic && targetSet && !isLocked)) && (
           <div className="text-xs text-teal-400 mt-2 uppercase tracking-wide">
             Click and drag to adjust
           </div>
@@ -180,6 +180,28 @@ export default function ActiveGameScreen() {
   );
   const [totalPlayers, setTotalPlayers] = useState(0);
   const [allPlayersLocked, setAllPlayersLocked] = useState(false);
+  const [showPsychicResults, setShowPsychicResults] = useState(false);
+
+  // Extract values with fallbacks for hook dependencies
+  const roomId = gameData?.roomId || "";
+  const playerId = gameData?.playerId || "";
+  const round = roundData?.gameState.current_round || 0;
+  const isPsychic =
+    gameData?.playerId === roundData?.gameState.current_psychic_id;
+
+  // Reset all round-specific states when round number changes (new round started)
+  useEffect(() => {
+    if (round > 0) {
+      console.log("[ActiveGame] Round changed, resetting states for round:", round);
+      setDialPosition(50); // Reset to center
+      setIsDragging(false);
+      setIsLocked(false);
+      setTargetSet(false);
+      setOtherPlayerDials([]);
+      setAllPlayersLocked(false);
+      setShowPsychicResults(false);
+    }
+  }, [round]);
 
   // Initialize targetSet and dialPosition from roundData when target_position exists
   useEffect(() => {
@@ -192,13 +214,6 @@ export default function ActiveGameScreen() {
     }
   }, [roundData?.round.target_position, gameData?.playerId, roundData?.gameState.current_psychic_id]);
 
-  // Extract values with fallbacks for hook dependencies
-  const roomId = gameData?.roomId || "";
-  const playerId = gameData?.playerId || "";
-  const round = roundData?.gameState.current_round || 0;
-  const isPsychic =
-    gameData?.playerId === roundData?.gameState.current_psychic_id;
-
   // Handle dial updates from other players via custom hook
   const handleDialUpdate = useCallback((dials: OtherPlayerDial[]) => {
     setOtherPlayerDials(dials);
@@ -210,13 +225,22 @@ export default function ActiveGameScreen() {
   // Fetch total player count
   useEffect(() => {
     const fetchPlayerCount = async () => {
+      if (!roomId) {
+        console.log("[ActiveGame] No roomId provided, skipping player count fetch");
+        return;
+      }
+
       try {
         const { count, error } = await supabase
           .from("players")
-          .select("*", { count: "exact", head: true })
+          .select("id", { count: "exact", head: true })
           .eq("room_id", roomId);
 
-        if (error) throw error;
+        if (error) {
+          console.error("[ActiveGame] Error fetching player count:", error);
+          throw error;
+        }
+        
         setTotalPlayers(count || 0);
         console.log("[ActiveGame] Total players in room:", count);
       } catch (err) {
@@ -416,18 +440,24 @@ export default function ActiveGameScreen() {
 
     if (allLocked && !allPlayersLocked) {
       console.log(
-        "[ActiveGame] ✅ All players locked in! Transitioning to results..."
+        "[ActiveGame] ✅ All players locked in!"
       );
       setAllPlayersLocked(true);
 
-      // Navigate to results screen after a short delay for all players including psychic
-      const roomCodeToUse = gameData?.roomCode || storeRoomCode;
-      setTimeout(() => {
-        console.log("[ActiveGame] Transitioning to results screen");
-        if (roomCodeToUse) {
-          router.push(`/room/${roomCodeToUse}/results`);
-        }
-      }, 2000); // Increased delay to 2s so players can see the gradient reveal
+      // For psychic: show results inline with next round button
+      // For non-psychic: auto-navigate to results screen
+      if (isPsychic) {
+        console.log("[ActiveGame] Showing results to psychic");
+        setShowPsychicResults(true);
+      } else {
+        const roomCodeToUse = gameData?.roomCode || storeRoomCode;
+        setTimeout(() => {
+          console.log("[ActiveGame] Transitioning to results screen");
+          if (roomCodeToUse) {
+            router.push(`/room/${roomCodeToUse}/results`);
+          }
+        }, 2000);
+      }
     }
   }, [
     otherPlayerDials,
@@ -505,7 +535,7 @@ export default function ActiveGameScreen() {
     // Generate random position between 0 and 100
     const randomPosition = Math.floor(Math.random() * 101);
     setDialPosition(randomPosition);
-    setIsLocked(true);
+    // Don't set isLocked for psychic - they need to receive dial updates from other players
     
     try {
       console.log(`[PSYCHIC] Setting random target position at ${randomPosition}%`);
@@ -518,14 +548,13 @@ export default function ActiveGameScreen() {
       console.log(`[PSYCHIC] Random target position set successfully`);
     } catch (err) {
       console.error("Failed to set random target position:", err);
-      setIsLocked(false);
     }
   };
 
   const handleSetTarget = async () => {
     if (!isPsychic || !roomId || !round) return;
     
-    setIsLocked(true);
+    // Don't set isLocked for psychic - they need to receive dial updates from other players
     
     try {
       console.log(`[PSYCHIC] Setting target position at ${dialPosition}%`);
@@ -538,12 +567,19 @@ export default function ActiveGameScreen() {
       console.log(`[PSYCHIC] Target position set successfully`);
     } catch (err) {
       console.error("Failed to set target position:", err);
-      setIsLocked(false);
     }
   };
 
   // Calculate needle angle (-90 to 90 degrees for semicircle)
   const needleAngle = -90 + (dialPosition / 100) * 180;
+
+  // Handler for psychic to advance to next round
+  const handleNextRound = () => {
+    const roomCodeToUse = gameData?.roomCode || storeRoomCode;
+    if (roomCodeToUse) {
+      router.push(`/room/${roomCodeToUse}/results`);
+    }
+  };
 
   // Early return after all hooks
   if (!gameData) return null;
@@ -688,42 +724,91 @@ export default function ActiveGameScreen() {
       {/* Action Area */}
       <div className="px-6 py-8">
         <div className="max-w-2xl mx-auto">
-          {isPsychic ? (
+          {isPsychic && showPsychicResults ? (
+            // Psychic results view with player scores
+            <div className="space-y-6">
+              <div className="bg-zinc-900 border-2 border-teal-500 p-6">
+                <h2 className="text-2xl font-bold text-teal-400 mb-4 uppercase tracking-wider">
+                  All Players Locked In - Results
+                </h2>
+                <div className="space-y-3">
+                  {otherPlayerDials.map((player) => {
+                    const distance = Math.abs(player.position - targetPos);
+                    const score = Math.max(0, 100 - distance);
+                    return (
+                      <div
+                        key={player.playerId}
+                        className="bg-zinc-800 border border-zinc-700 p-4 flex justify-between items-center"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-3 h-3 bg-fuchsia-500 rounded-full"></div>
+                          <span className="text-white font-medium">{player.playerName}</span>
+                        </div>
+                        <div className="flex items-center space-x-6">
+                          <div className="text-gray-400">
+                            Guess: <span className="text-white font-bold">{Math.round(player.position)}%</span>
+                          </div>
+                          <div className="text-gray-400">
+                            Distance: <span className="text-fuchsia-400 font-bold">{Math.round(distance)}</span>
+                          </div>
+                          <div className="text-teal-400 font-bold text-xl">
+                            +{Math.round(score)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 pt-4 border-t border-zinc-700 text-center">
+                  <div className="text-gray-400">
+                    Target Position: <span className="text-teal-400 font-bold text-xl">{Math.round(targetPos)}%</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleNextRound}
+                className="w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest transition-all duration-300 border-2 relative overflow-hidden bg-gradient-to-r from-teal-600 to-teal-700 border-teal-500 text-white hover:from-teal-500 hover:to-teal-600 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] cursor-pointer"
+              >
+                Next Round →
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
+              </button>
+            </div>
+          ) : isPsychic ? (
             // Psychic buttons - set target position or random
             <div className="flex gap-4">
               <button
                 onClick={handleSetTarget}
-                disabled={isLocked}
+                disabled={targetSet}
                 className={`
                   flex-1 py-6 px-8 text-3xl font-bold uppercase tracking-widest
                   transition-all duration-300 border-2 relative overflow-hidden
                   ${
-                    isLocked
+                    targetSet
                       ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
                       : "bg-gradient-to-r from-teal-600 to-teal-700 border-teal-500 text-white hover:from-teal-500 hover:to-teal-600 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] cursor-pointer"
                   }
                 `}
               >
-                {isLocked ? "TARGET SET - WAITING FOR PLAYERS" : "SET TARGET POSITION"}
-                {!isLocked && (
+                {targetSet ? "TARGET SET - WAITING FOR PLAYERS" : "SET TARGET POSITION"}
+                {!targetSet && (
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
                 )}
               </button>
               <button
                 onClick={handleSetRandomTarget}
-                disabled={isLocked}
+                disabled={targetSet}
                 className={`
                   flex-1 py-6 px-8 text-3xl font-bold uppercase tracking-widest
                   transition-all duration-300 border-2 relative overflow-hidden
                   ${
-                    isLocked
+                    targetSet
                       ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
                       : "bg-gradient-to-r from-purple-600 to-purple-700 border-purple-500 text-white hover:from-purple-500 hover:to-purple-600 hover:shadow-[0_0_40px_rgba(168,85,247,0.6)] cursor-pointer"
                   }
                 `}
               >
-                {isLocked ? "TARGET SET" : "RANDOM TARGET"}
-                {!isLocked && (
+                {targetSet ? "TARGET SET" : "RANDOM TARGET"}
+                {!targetSet && (
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
                 )}
               </button>

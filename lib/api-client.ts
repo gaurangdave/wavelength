@@ -203,6 +203,14 @@ export async function setTargetPosition(
   return response.json();
 }
 
+// Advance to next round (rotates psychic and creates new round)
+export async function advanceRound(roomId: string) {
+  return handleRoundAction({
+    action: 'advance',
+    roomId
+  });
+}
+
 // Generate a unique peer ID
 export function generatePeerId(): string {
   return `peer-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;

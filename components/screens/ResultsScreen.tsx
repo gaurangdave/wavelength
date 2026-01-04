@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/lib/store';
 import { createDialGradient } from '@/lib/theme';
 import { DialNeedle } from '@/components/ui/GameComponents';
+import * as api from '@/lib/api-client';
 
 interface PlayerGuess {
   playerId: string;
@@ -184,13 +185,37 @@ export default function ResultsScreen() {
   
   const [playerGuesses, setPlayerGuesses] = useState<PlayerGuess[]>([]);
   const [loading, setLoading] = useState(true);
+  const [advancingRound, setAdvancingRound] = useState(false);
 
-  const handleNextRound = () => {
-    console.log('Next round clicked');
-    // TODO: Start next round logic - navigate back to play screen
+  const handleNextRound = async () => {
+    if (!gameData) return;
+    
     const roomCodeToUse = gameData?.roomCode || storeRoomCode;
-    if (roomCodeToUse) {
-      router.push(`/room/${roomCodeToUse}/play`);
+    
+    try {
+      setAdvancingRound(true);
+      console.log('[ResultsScreen] Advancing to next round...');
+      
+      // Check if game is finished
+      if (round >= maxRounds) {
+        console.log('[ResultsScreen] Game complete - redirecting to lobby');
+        if (roomCodeToUse) {
+          router.push(`/room/${roomCodeToUse}`);
+        }
+        return;
+      }
+      
+      // Call API to advance round (will rotate psychic and create new round)
+      const result = await api.advanceRound(gameData.roomId);
+      console.log('[ResultsScreen] Round advanced:', result);
+      
+      // Navigate back to play screen for next round
+      if (roomCodeToUse) {
+        router.push(`/room/${roomCodeToUse}/play`);
+      }
+    } catch (err) {
+      console.error('[ResultsScreen] Failed to advance round:', err);
+      setAdvancingRound(false);
     }
   };
 
@@ -352,9 +377,19 @@ export default function ResultsScreen() {
           <div className="text-center">
             <button
               onClick={handleNextRound}
-              className="px-12 py-6 bg-fuchsia-600 border-2 border-fuchsia-500 text-white text-2xl font-bold uppercase tracking-widest hover:bg-fuchsia-700 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] transition-all duration-300"
+              disabled={advancingRound}
+              className={`px-12 py-6 border-2 text-white text-2xl font-bold uppercase tracking-widest transition-all duration-300 ${
+                advancingRound
+                  ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
+                  : 'bg-fuchsia-600 border-fuchsia-500 hover:bg-fuchsia-700 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)]'
+              }`}
             >
-              {round >= maxRounds ? 'FINISH GAME' : 'NEXT ROUND'}
+              {advancingRound 
+                ? 'STARTING NEXT ROUND...' 
+                : round >= maxRounds 
+                  ? 'FINISH GAME' 
+                  : 'NEXT ROUND'
+              }
             </button>
           </div>
         </div>

@@ -4,7 +4,18 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+  auth: {
+    autoRefreshToken: true,
+    persistSession: false,
+    detectSessionInUrl: false,
+  },
+})
 
 export interface GameSettings {
   numberOfLives: number
@@ -467,7 +478,8 @@ export async function updateGameScore(roomId: string, scoreChange: number, lives
   if (error) throw error
 }
 
-export async function advanceRound(roomId: string) {
+export async function advanceRound(roomId: string, newLeftConcept: string, newRightConcept: string) {
+  // Get current game state
   const { data: gameState, error: fetchError } = await supabase
     .from('game_state')
     .select()
@@ -476,12 +488,46 @@ export async function advanceRound(roomId: string) {
 
   if (fetchError) throw fetchError
 
-  const { error } = await supabase
+  // Get all players in the room (ordered by join time for consistent rotation)
+  const { data: players, error: playersError } = await supabase
+    .from('players')
+    .select()
+    .eq('room_id', roomId)
+    .order('joined_at', { ascending: true })
+
+  if (playersError) throw playersError
+  if (!players || players.length === 0) throw new Error('No players found in room')
+
+  // Find the current psychic index
+  const currentPsychicIndex = players.findIndex(p => p.id === gameState.current_psychic_id)
+  
+  // Rotate to next player (wrap around to first player if at end)
+  const nextPsychicIndex = (currentPsychicIndex + 1) % players.length
+  const newPsychicId = players[nextPsychicIndex].id
+
+  console.log('[advanceRound] Rotating psychic from', gameState.current_psychic_id, 'to', newPsychicId)
+
+  // Update game state: increment round and set new psychic
+  const { error: updateError } = await supabase
     .from('game_state')
-    .update({ current_round: gameState.current_round + 1 })
+    .update({ 
+      current_round: gameState.current_round + 1,
+      current_psychic_id: newPsychicId
+    })
     .eq('room_id', roomId)
 
-  if (error) throw error
+  if (updateError) throw updateError
+
+  // Create new round with new concepts (target_position will be null until psychic sets it)
+  const newRound = await createRound(
+    roomId,
+    gameState.current_round + 1,
+    newLeftConcept,
+    newRightConcept,
+    null // Psychic will set target position
+  )
+
+  return { newRound, newPsychicId }
 }
 
 export async function endGame(roomId: string) {

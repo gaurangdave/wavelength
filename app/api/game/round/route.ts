@@ -91,8 +91,16 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        await advanceRound(roomId);
-        return NextResponse.json({ success: true });
+        // Select a new random concept pair for the next round
+        const randomConcepts = CONCEPT_PAIRS[Math.floor(Math.random() * CONCEPT_PAIRS.length)];
+        
+        const result = await advanceRound(roomId, randomConcepts.left, randomConcepts.right);
+        
+        return NextResponse.json({ 
+          success: true, 
+          newRound: result.newRound,
+          newPsychicId: result.newPsychicId
+        });
       }
 
       default:
