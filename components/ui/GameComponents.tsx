@@ -385,3 +385,109 @@ export function ErrorMessage({ message }: ErrorMessageProps) {
     </div>
   );
 }
+
+// ============================================================================
+// DIAL NEEDLE COMPONENTS
+// ============================================================================
+
+interface NeedleProps {
+  angle: number; // Angle in degrees (-90 to 90 for semicircle)
+  color?: string;
+  isDragging?: boolean;
+  showPivot?: boolean;
+  height?: number;
+  width?: number;
+  opacity?: number;
+}
+
+export function Needle({ 
+  angle, 
+  color = 'rgb(236, 72, 153)', 
+  isDragging = false,
+  showPivot = true,
+  height = 230,
+  width = 5,
+  opacity = 1
+}: NeedleProps) {
+  return (
+    <div
+      className="absolute bottom-0 left-1/2 w-10 h-[220px] pointer-events-none"
+      style={{ transform: 'translateX(-50%)' }}
+    >
+      {/* Needle */}
+      <div
+        className={`absolute bottom-0 left-1/2 rounded-t-full transition-all duration-100 ${
+          isDragging ? "animate-pulse" : ""
+        }`}
+        style={{
+          width: `${width}px`,
+          height: `${height}px`,
+          background: "rgb(254, 254, 254)",
+          transformOrigin: "bottom center",
+          transform: `translateX(-50%) rotate(${angle}deg)`,
+          // boxShadow: isDragging
+          //   ? "0 0 20px rgba(255, 20, 147, 0.8), 0 0 40px rgba(255, 20, 147, 0.4)"
+          //   : `0 0 15px ${color}80, 0 0 30px ${color}66`,
+          filter: isDragging
+            ? "drop-shadow(0 0 8px rgb(255, 20, 147))"
+            : `drop-shadow(0 0 6px ${color})`,
+          opacity
+        }}
+      />
+
+      {/* Pivot Point */}
+      {showPivot && (
+        <div
+          className="absolute bottom-0 left-1/2 transform -translate-x-1/2 pointer-events-auto"
+          style={{ cursor: "grab" }}
+        >
+          {/* Enlarged hit area */}
+          <div className="absolute w-12 h-12 -translate-x-1/2 -translate-y-1/2 rounded-full"></div>
+
+          {/* Outer ring */}
+          <div
+            className="w-8 h-8 rounded-full border-2 transition-all duration-200 -translate-x-1/2 -translate-y-1/2 absolute"
+            style={{
+              background: "rgb(254, 254, 254)",
+              borderColor: isDragging ? "rgb(255, 20, 147)" : color,
+              // boxShadow: isDragging
+              //   ? "0 0 20px rgba(255, 20, 147, 0.8)"
+              //   : `0 0 15px ${color}99`,
+            }}
+          />
+
+          {/* Inner circle */}
+          <div
+            className="w-4 h-4 rounded-full transition-all duration-200 -translate-x-1/2 -translate-y-1/2 absolute"
+            style={{
+              // backgroundColor: isDragging ? "rgb(255, 20, 147)" : color,
+              // boxShadow: `0 0 10px ${color}`,
+            }}
+          />
+
+          {/* Center dot */}
+          <div className="w-1.5 h-1.5 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 absolute"></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface DialNeedleProps {
+  position: number; // Position as percentage (0-100)
+  color?: string;
+  isDragging?: boolean;
+  showPivot?: boolean;
+  height?: number;
+  width?: number;
+  opacity?: number;
+}
+
+/**
+ * Dial Needle component that converts position percentage to angle
+ */
+export function DialNeedle({ position, ...props }: DialNeedleProps) {
+  // Convert percentage (0-100) to angle (-90 to 90 degrees for semicircle)
+  const angle = -90 + (position / 100) * 180;
+  return <Needle angle={angle} {...props} />;
+}

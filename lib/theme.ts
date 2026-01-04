@@ -73,11 +73,11 @@ export const theme = {
 
   // Dial Scoring Gradient Colors
   dial: {
-    empty: '#3f3f46',         // zinc-700 - no points
-    close: '#06b6d4',         // cyan-500 - 1 point
-    good: '#eab308',          // yellow-500 - 2 points
-    great: '#f97316',         // orange-500 - 3 points
-    perfect: '#ef4444',       // red-500 - 4 points
+    empty: '#27272a',         // zinc-800 - no points (darker)
+    close: '#FFD700',         // blue-500 - 1 point 
+    good: '#FF8000',          // green-500 - 2 points
+    great: '#00A0A0',         // yellow-500 - 3 points
+    // perfect: '#000080',       // red-500 - 4 points
   },
 
   // Spacing
@@ -172,9 +172,14 @@ export const themeClasses = {
 
 /**
  * Generate dial gradient for scoring visualization
+ * Creates a conic gradient with 3 equal-sized color zones for scoring
  */
 export function createDialGradient(targetPosition: number): string {
+  // Convert percentage (0-100) to angle (-90 to 90 degrees)
   const targetAngle = targetPosition * 1.8 - 90;
+  
+  // Equal-sized zones: 5 zones total (close-good-great-good-close) = 36 degrees each
+  const zoneWidth = 6;
   
   console.log(
     "[createDialGradient] Input targetPosition:",
@@ -183,15 +188,24 @@ export function createDialGradient(targetPosition: number): string {
     targetAngle
   );
   
+  // Create gradient with 5 equal zones centered on target
+  // Structure: [empty] [close] [good] [great] [good] [close] [empty]
   return `conic-gradient(
     from -90deg at 50% 100%,
-    ${theme.dial.empty} 0deg ${targetAngle - 22.5 + 90}deg,
-    ${theme.dial.close} ${targetAngle - 22.5 + 90}deg ${targetAngle - 13.5 + 90}deg,
-    ${theme.dial.good} ${targetAngle - 13.5 + 90}deg ${targetAngle - 4.5 + 90}deg,
-    ${theme.dial.great} ${targetAngle - 4.5 + 90}deg ${targetAngle + 4.5 + 90}deg,
-    ${theme.dial.perfect} ${targetAngle + 4.5 + 90}deg ${targetAngle + 13.5 + 90}deg,
-    ${theme.dial.great} ${targetAngle + 13.5 + 90}deg ${targetAngle + 22.5 + 90}deg,
-    ${theme.dial.empty} ${targetAngle + 22.5 + 90}deg 180deg
+    ${theme.dial.empty} 0deg,
+    ${theme.dial.empty} ${targetAngle - (zoneWidth * 2.5) + 90}deg,
+    ${theme.dial.close} ${targetAngle - (zoneWidth * 2.5) + 90}deg,
+    ${theme.dial.close} ${targetAngle - (zoneWidth * 1.5) + 90}deg,
+    ${theme.dial.good} ${targetAngle - (zoneWidth * 1.5) + 90}deg,
+    ${theme.dial.good} ${targetAngle - (zoneWidth * 0.5) + 90}deg,
+    ${theme.dial.great} ${targetAngle - (zoneWidth * 0.5) + 90}deg,
+    ${theme.dial.great} ${targetAngle + (zoneWidth * 0.5) + 90}deg,
+    ${theme.dial.good} ${targetAngle + (zoneWidth * 0.5) + 90}deg,
+    ${theme.dial.good} ${targetAngle + (zoneWidth * 1.5) + 90}deg,
+    ${theme.dial.close} ${targetAngle + (zoneWidth * 1.5) + 90}deg,
+    ${theme.dial.close} ${targetAngle + (zoneWidth * 2.5) + 90}deg,
+    ${theme.dial.empty} ${targetAngle + (zoneWidth * 2.5) + 90}deg,
+    ${theme.dial.empty} 180deg
   )`;
 }
 
@@ -199,10 +213,9 @@ export function createDialGradient(targetPosition: number): string {
  * Calculate points based on distance from target
  */
 export function calculatePoints(distance: number): number {
-  if (distance <= 5) return 4;  // Perfect
-  if (distance <= 10) return 3; // Great
-  if (distance <= 20) return 2; // Good
-  if (distance <= 30) return 1; // Close
+  if (distance <= 10) return 3; // Great (center zone)
+  if (distance <= 25) return 2; // Good (inner zones)
+  if (distance <= 40) return 1; // Close (outer zones)
   return 0;                     // No points
 }
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/lib/store';
 import { createDialGradient } from '@/lib/theme';
+import { DialNeedle } from '@/components/ui/GameComponents';
 
 interface PlayerGuess {
   playerId: string;
@@ -85,44 +86,29 @@ function ResultsDial({ playerGuesses, targetPosition, leftConcept, rightConcept 
             
             {/* All player needles */}
             {playerGuesses.map((guess, index) => {
-              const needleAngle = -90 + (guess.position / 100) * 180;
               const color = colors[index % colors.length];
               
               return (
-                <div
+                <DialNeedle
                   key={guess.playerId}
-                  className="absolute bottom-0 left-1/2 w-8 h-[200px] pointer-events-none"
-                  style={{ transform: 'translateX(-50%)' }}
-                >
-                  <div
-                    className="absolute bottom-0 left-1/2 w-1.5 h-[180px] rounded-t-full"
-                    style={{
-                      background: color,
-                      transformOrigin: 'bottom center',
-                      transform: `translateX(-50%) rotate(${needleAngle}deg)`,
-                      boxShadow: `0 0 10px ${color}`
-                    }}
-                  />
-                </div>
+                  position={guess.position}
+                  color={color}
+                  showPivot={false}
+                  height={180}
+                  width={1.5}
+                />
               );
             })}
 
             {/* Target indicator */}
-            <div
-              className="absolute bottom-0 left-1/2 w-8 h-[200px] pointer-events-none"
-              style={{ transform: 'translateX(-50%)' }}
-            >
-              <div
-                className="absolute bottom-0 left-1/2 w-2 h-[200px] rounded-t-full"
-                style={{
-                  background: 'rgb(255, 255, 255)',
-                  transformOrigin: 'bottom center',
-                  transform: `translateX(-50%) rotate(${-90 + (targetPosition / 100) * 180}deg)`,
-                  boxShadow: '0 0 20px rgba(255, 255, 255, 0.8)',
-                  opacity: 0.9
-                }}
-              />
-            </div>
+            <DialNeedle
+              position={targetPosition}
+              color="rgb(255, 255, 255)"
+              showPivot={false}
+              height={200}
+              width={2}
+              opacity={0.9}
+            />
           </div>
         </div>
 

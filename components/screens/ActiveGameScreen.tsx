@@ -7,7 +7,8 @@ import { useGameStore } from "@/lib/store";
 import { useDialUpdates, useRoundUpdates } from "@/lib/hooks/useRealtimeSubscriptions";
 import {
   ConceptPair,
-  PsychicHint
+  PsychicHint,
+  DialNeedle
 } from "@/components/ui/GameComponents";
 import { createDialGradient } from "@/lib/theme";
 import * as api from "@/lib/api-client";
@@ -498,6 +499,29 @@ export default function ActiveGameScreen() {
     }
   };
 
+  const handleSetRandomTarget = async () => {
+    if (!isPsychic || !roomId || !round) return;
+    
+    // Generate random position between 0 and 100
+    const randomPosition = Math.floor(Math.random() * 101);
+    setDialPosition(randomPosition);
+    setIsLocked(true);
+    
+    try {
+      console.log(`[PSYCHIC] Setting random target position at ${randomPosition}%`);
+      await api.setTargetPosition(roomId, round, randomPosition);
+      
+      // Update the store with the new target position
+      updateTargetPosition(randomPosition);
+      
+      setTargetSet(true);
+      console.log(`[PSYCHIC] Random target position set successfully`);
+    } catch (err) {
+      console.error("Failed to set random target position:", err);
+      setIsLocked(false);
+    }
+  };
+
   const handleSetTarget = async () => {
     if (!isPsychic || !roomId || !round) return;
     
@@ -633,67 +657,11 @@ export default function ActiveGameScreen() {
             </div>
 
             {/* Needle Container */}
-            <div
-              className="absolute bottom-0 left-1/2 w-10 h-[220px] pointer-events-none"
-              style={{ transform: "translateX(-50%)" }}
-            >
-              {/* Needle */}
-              <div
-                className={`absolute bottom-0 left-1/2 w-1.5 h-[200px] rounded-t-full transition-all duration-100 ${
-                  isDragging ? "animate-pulse" : ""
-                }`}
-                style={{
-                  background: isDragging
-                    ? "rgb(255, 20, 147)"
-                    : "rgb(236, 72, 153)",
-                  transformOrigin: "bottom center",
-                  transform: `translateX(-50%) rotate(${needleAngle}deg)`,
-                  boxShadow: isDragging
-                    ? "0 0 20px rgba(255, 20, 147, 0.8), 0 0 40px rgba(255, 20, 147, 0.4)"
-                    : "0 0 15px rgba(236, 72, 153, 0.8), 0 0 30px rgba(236, 72, 153, 0.4)",
-                  filter: isDragging
-                    ? "drop-shadow(0 0 8px rgb(255, 20, 147))"
-                    : "drop-shadow(0 0 6px rgb(236, 72, 153))",
-                }}
-              />
-
-              {/* Pivot Point */}
-              <div
-                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 pointer-events-auto"
-                style={{ cursor: !isLocked ? "grab" : "not-allowed" }}
-              >
-                {/* Enlarged hit area */}
-                <div className="absolute w-12 h-12 -translate-x-1/2 -translate-y-1/2 rounded-full"></div>
-
-                {/* Outer ring */}
-                <div
-                  className={`w-8 h-8 rounded-full border-2 transition-all duration-200 -translate-x-1/2 -translate-y-1/2 absolute`}
-                  style={{
-                    backgroundColor: "rgb(39, 39, 42)",
-                    borderColor: isDragging
-                      ? "rgb(255, 20, 147)"
-                      : "rgb(236, 72, 153)",
-                    boxShadow: isDragging
-                      ? "0 0 20px rgba(255, 20, 147, 0.8)"
-                      : "0 0 15px rgba(236, 72, 153, 0.6)",
-                  }}
-                />
-
-                {/* Inner circle */}
-                <div
-                  className="w-4 h-4 rounded-full transition-all duration-200 -translate-x-1/2 -translate-y-1/2 absolute"
-                  style={{
-                    backgroundColor: isDragging
-                      ? "rgb(255, 20, 147)"
-                      : "rgb(236, 72, 153)",
-                    boxShadow: "0 0 10px rgba(236, 72, 153, 1)",
-                  }}
-                />
-
-                {/* Center dot */}
-                <div className="w-1.5 h-1.5 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 absolute"></div>
-              </div>
-            </div>
+            <DialNeedle
+              position={dialPosition}
+              isDragging={isDragging}
+              showPivot={true}
+            />
           </div>
 
           {/* Spectrum Extremes Labels */}
@@ -721,25 +689,45 @@ export default function ActiveGameScreen() {
       <div className="px-6 py-8">
         <div className="max-w-2xl mx-auto">
           {isPsychic ? (
-            // Psychic button - set target position
-            <button
-              onClick={handleSetTarget}
-              disabled={isLocked}
-              className={`
-                w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest
-                transition-all duration-300 border-2 relative overflow-hidden
-                ${
-                  isLocked
-                    ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-teal-600 to-teal-700 border-teal-500 text-white hover:from-teal-500 hover:to-teal-600 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] cursor-pointer"
-                }
-              `}
-            >
-              {isLocked ? "TARGET SET - WAITING FOR PLAYERS" : "SET TARGET POSITION"}
-              {!isLocked && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
-              )}
-            </button>
+            // Psychic buttons - set target position or random
+            <div className="flex gap-4">
+              <button
+                onClick={handleSetTarget}
+                disabled={isLocked}
+                className={`
+                  flex-1 py-6 px-8 text-3xl font-bold uppercase tracking-widest
+                  transition-all duration-300 border-2 relative overflow-hidden
+                  ${
+                    isLocked
+                      ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-teal-600 to-teal-700 border-teal-500 text-white hover:from-teal-500 hover:to-teal-600 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] cursor-pointer"
+                  }
+                `}
+              >
+                {isLocked ? "TARGET SET - WAITING FOR PLAYERS" : "SET TARGET POSITION"}
+                {!isLocked && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
+                )}
+              </button>
+              <button
+                onClick={handleSetRandomTarget}
+                disabled={isLocked}
+                className={`
+                  flex-1 py-6 px-8 text-3xl font-bold uppercase tracking-widest
+                  transition-all duration-300 border-2 relative overflow-hidden
+                  ${
+                    isLocked
+                      ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-600 to-purple-700 border-purple-500 text-white hover:from-purple-500 hover:to-purple-600 hover:shadow-[0_0_40px_rgba(168,85,247,0.6)] cursor-pointer"
+                  }
+                `}
+              >
+                {isLocked ? "TARGET SET" : "RANDOM TARGET"}
+                {!isLocked && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
+                )}
+              </button>
+            </div>
           ) : !targetSet ? (
             // Non-psychic waiting for target
             <button
