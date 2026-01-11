@@ -377,6 +377,20 @@ export const useGameStore = create<GameStore>()(
       const result = await api.advanceRound(gameData.roomId);
       console.log('[Store] Round advanced successfully:', result);
       
+      // Fetch and update the full game state with new round data
+      const updatedState = await api.getGameState(gameData.roomId);
+      console.log('[Store] Updated game state fetched:', updatedState);
+      
+      if (updatedState.currentRound && updatedState.gameState) {
+        set({
+          roundData: {
+            round: updatedState.currentRound,
+            gameState: updatedState.gameState
+          }
+        });
+        console.log('[Store] Round data updated in store');
+      }
+      
       // Navigate back to play screen for next round
       if (roomCode) {
         router.push(`/room/${roomCode}/play`);

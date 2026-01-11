@@ -8,6 +8,7 @@ import { actions } from '@/lib/actions';
 import { GameHUD } from '@/components/ui/GameHUD';
 import { ResultsDial } from '@/components/ui/ResultsDial';
 import { PlayerScoresTable } from '@/components/ui/PlayerScoresTable';
+import { useNewRoundInserts, useGameStateUpdates } from '@/lib/hooks/useRealtimeSubscriptions';
 
 // Local interface matching component's usage
 interface PlayerGuess {
@@ -29,6 +30,31 @@ export default function ResultsScreen() {
   const [playerGuesses, setPlayerGuesses] = useState<PlayerGuess[]>([]);
   const [loading, setLoading] = useState(true);
   const [advancingRound, setAdvancingRound] = useState(false);
+  const [initialRound, setInitialRound] = useState<number | null>(null);
+
+  // Track the initial round number this screen was loaded for
+  useEffect(() => {
+    if (roundData && initialRound === null) {
+      setInitialRound(roundData.gameState.current_round);
+    }
+  }, [roundData, initialRound]);
+
+  // Navigate to play screen if round changes (someone else clicked Next Round)
+  useEffect(() => {
+    if (roundData && initialRound !== null && roundData.gameState.current_round > initialRound) {
+      console.log('[ResultsScreen] Round changed from', initialRound, 'to', roundData.gameState.current_round, '- navigating to play');
+      const roomCodeToUse = gameData?.roomCode || storeRoomCode;
+      if (roomCodeToUse) {
+        router.push(`/room/${roomCodeToUse}/play`);
+      }
+    }
+  }, [roundData, initialRound, router, gameData, storeRoomCode]);
+
+  // Listen for game state updates (when current_round changes)
+  useGameStateUpdates(gameData?.roomId);
+  
+  // Listen for new round inserts (updates store with new round data)
+  useNewRoundInserts(gameData?.roomId);
 
   const handleNextRound = async () => {
     try {
@@ -50,12 +76,18 @@ export default function ResultsScreen() {
 
   // Fetch all player guesses
   useEffect(() => {
-    if (!gameData || !roundData) return;
+    if (!gameData || !roundData || initialRound === null) return;
     
     const roomId = gameData.roomId;
     const round = roundData.gameState.current_round;
     const targetPosition = roundData.round.target_position;
     const maxPoints = gameData.gameSettings.maxPoints;
+    
+    // Only fetch guesses for the initial round this screen was loaded for
+    if (round !== initialRound) {
+      console.log('[ResultsScreen] Skipping fetch - round changed from', initialRound, 'to', round);
+      return;
+    }
     
     if (targetPosition === null || targetPosition === undefined) {
       console.error('[ResultsScreen] Target position is null - cannot calculate scores');
@@ -90,7 +122,7 @@ export default function ResultsScreen() {
     };
 
     fetchGuesses();
-  }, [gameData, roundData]);
+  }, [gameData, roundData, initialRound]);
 
   if (!gameData || !roundData) return null;
   
