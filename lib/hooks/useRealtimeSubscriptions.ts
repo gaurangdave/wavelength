@@ -342,11 +342,11 @@ export function useRoundUpdates(
 
 /**
  * Hook to listen for game state updates (current_round changes)
- * All players use this to detect when a new round starts
+ * PERFORMANCE OPTIMIZED: Updates store directly from payload instead of refetching
  */
 export function useGameStateUpdates(
   roomId: string | undefined,
-  onGameStateUpdate: () => void
+  onGameStateUpdate?: () => void
 ) {
   const callbackRef = useRef(onGameStateUpdate);
   
@@ -377,8 +377,39 @@ export function useGameStateUpdates(
         (payload) => {
           console.log('[useGameStateUpdates] ✅ Game state update received:', payload);
           
-          // Trigger callback to reload game state
-          callbackRef.current();
+          // PERFORMANCE: Update store directly from payload instead of refetching
+          if (payload.new && typeof payload.new === 'object') {
+            const newGameState = payload.new as Record<string, unknown>;
+            const { updateGameState } = useGameStore.getState();
+            
+            // Extract the fields we care about
+            const update: Partial<{
+              current_round: number;
+              team_score: number;
+              lives_remaining: number;
+              current_psychic_id: string;
+            }> = {};
+            
+            if (typeof newGameState.current_round === 'number') {
+              update.current_round = newGameState.current_round;
+            }
+            if (typeof newGameState.team_score === 'number') {
+              update.team_score = newGameState.team_score;
+            }
+            if (typeof newGameState.lives_remaining === 'number') {
+              update.lives_remaining = newGameState.lives_remaining;
+            }
+            if (typeof newGameState.current_psychic_id === 'string') {
+              update.current_psychic_id = newGameState.current_psychic_id;
+            }
+            
+            updateGameState(update);
+          }
+          
+          // Still call callback if provided (for additional side effects)
+          if (callbackRef.current) {
+            callbackRef.current();
+          }
         }
       )
       .subscribe((status) => {
@@ -397,13 +428,14 @@ export function useGameStateUpdates(
 
 /**
  * Hook to listen for player updates (for detecting psychic role changes)
- * Each player subscribes to changes on their own player record
+ * PERFORMANCE OPTIMIZED: Checks if psychic status changed and triggers callback only then
  */
 export function usePlayerUpdates(
   playerId: string | undefined,
-  onPlayerUpdate: () => void
+  onPlayerUpdate?: () => void
 ) {
   const callbackRef = useRef(onPlayerUpdate);
+  const lastPsychicStatusRef = useRef<boolean | null>(null);
   
   // Keep callback ref updated
   useEffect(() => {
@@ -432,8 +464,24 @@ export function usePlayerUpdates(
         (payload) => {
           console.log('[usePlayerUpdates] ✅ Player update received:', payload);
           
-          // Trigger callback to reload game state
-          callbackRef.current();
+          // PERFORMANCE: Only trigger callback if psychic status actually changed
+          if (payload.new && typeof payload.new === 'object') {
+            const newPlayer = payload.new as Record<string, unknown>;
+            const isPsychic = Boolean(newPlayer.is_psychic);
+            
+            // Check if psychic status changed
+            if (lastPsychicStatusRef.current !== null && lastPsychicStatusRef.current !== isPsychic) {
+              console.log('[usePlayerUpdates] 🔄 Psychic status changed:', lastPsychicStatusRef.current, '→', isPsychic);
+              
+              // Trigger callback for psychic role change
+              if (callbackRef.current) {
+                callbackRef.current();
+              }
+            }
+            
+            // Update last known status
+            lastPsychicStatusRef.current = isPsychic;
+          }
         }
       )
       .subscribe((status) => {
@@ -452,12 +500,19 @@ export function usePlayerUpdates(
 
 /**
  * Hook to listen for new round INSERT events
- * All players use this to detect when a new round is created
+ * PERFORMANCE OPTIMIZED: Updates store directly with new round data from payload
  */
 export function useNewRoundInserts(
   roomId: string | undefined,
-  onNewRound: () => void
+  onNewRound?: () => void
 ) {
+  const callbackRef = useRef(onNewRound);
+  
+  // Keep callback ref updated
+  useEffect(() => {
+    callbackRef.current = onNewRound;
+  }, [onNewRound]);
+
   useEffect(() => {
     if (!roomId) {
       console.log('[useNewRoundInserts] Skipping - missing roomId');
@@ -479,7 +534,39 @@ export function useNewRoundInserts(
         },
         (payload) => {
           console.log('[useNewRoundInserts] New round created:', payload);
-          onNewRound();
+          
+          // PERFORMANCE: Update store directly from payload
+          if (payload.new && typeof payload.new === 'object') {
+            const newRound = payload.new as Record<string, unknown>;
+            const { updateCurrentRound, roundData } = useGameStore.getState();
+            
+            // Only update if this is the current round
+            if (roundData && typeof newRound.round_number === 'number' && 
+                newRound.round_number === roundData.gameState.current_round) {
+              const roundUpdate: Partial<{
+                id: string;
+                round_number: number;
+                left_concept: string;
+                right_concept: string;
+                psychic_hint: string;
+                target_position: number;
+              }> = {};
+              
+              if (typeof newRound.id === 'string') roundUpdate.id = newRound.id;
+              if (typeof newRound.round_number === 'number') roundUpdate.round_number = newRound.round_number;
+              if (typeof newRound.left_concept === 'string') roundUpdate.left_concept = newRound.left_concept;
+              if (typeof newRound.right_concept === 'string') roundUpdate.right_concept = newRound.right_concept;
+              if (typeof newRound.psychic_hint === 'string') roundUpdate.psychic_hint = newRound.psychic_hint;
+              if (typeof newRound.target_position === 'number') roundUpdate.target_position = newRound.target_position;
+              
+              updateCurrentRound(roundUpdate);
+            }
+          }
+          
+          // Still call callback if provided
+          if (callbackRef.current) {
+            callbackRef.current();
+          }
         }
       )
       .subscribe((status) => {
@@ -493,5 +580,5 @@ export function useNewRoundInserts(
       console.log('[useNewRoundInserts] Cleaning up');
       supabase.removeChannel(channel);
     };
-  }, [roomId, onNewRound]);
+  }, [roomId]);
 }

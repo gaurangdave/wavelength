@@ -81,6 +81,11 @@ interface GameStore {
   
   updateTargetPosition: (targetPosition: number) => void;
   
+  // Direct update methods for realtime subscriptions (performance optimization)
+  setRoundData: (roundData: RoundData) => void;
+  updateGameState: (gameState: Partial<RoundData['gameState']>) => void;
+  updateCurrentRound: (round: Partial<RoundData['round']>) => void;
+  
   // Navigation actions
   resetGame: () => void;
   backToMenu: () => void;

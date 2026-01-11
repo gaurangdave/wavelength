@@ -495,18 +495,19 @@ export default function ActiveGameScreen() {
     handleRoundUpdate
   );
 
-  // Subscribe to game state updates for ALL players to detect round changes
+  // Subscribe to game state updates for ALL players
+  // PERFORMANCE: Hook now updates store directly, callback only for special cases
   const handleGameStateUpdate = useCallback(async () => {
-    console.log('[ActiveGame] Game state updated, reloading...');
-    const { loadGameState } = useGameStore.getState();
-    await loadGameState();
+    console.log('[ActiveGame] 🔄 Game state updated via realtime');
+    // Store is already updated by the hook, no additional action needed
   }, []);
 
   useGameStateUpdates(roomId, handleGameStateUpdate);
 
   // Subscribe to player updates to detect psychic role changes
+  // PERFORMANCE: Hook now tracks changes, callback only when psychic status changes
   const handlePlayerUpdate = useCallback(async () => {
-    console.log('[ActiveGame] Player updated (possible psychic role change), reloading...');
+    console.log('[ActiveGame] 🎭 Psychic role changed, refreshing game state...');
     const { loadGameState } = useGameStore.getState();
     await loadGameState();
   }, []);
@@ -514,10 +515,10 @@ export default function ActiveGameScreen() {
   usePlayerUpdates(playerId, handlePlayerUpdate);
 
   // Subscribe to new round INSERT events for ALL players
-  const handleNewRound = useCallback(async () => {
-    console.log('[ActiveGame] New round created, reloading game state...');
-    const { loadGameState } = useGameStore.getState();
-    await loadGameState();
+  // PERFORMANCE: Hook now updates store directly from payload
+  const handleNewRound = useCallback(() => {
+    console.log('[ActiveGame] 🎯 New round detected via realtime');
+    // Store already updated by the hook, no need to refetch
   }, []);
 
   useNewRoundInserts(roomId, handleNewRound);
@@ -627,7 +628,7 @@ export default function ActiveGameScreen() {
         } else {
           setRoundData({
             gameState: gameStateData,
-            currentRound: result.newRound
+            round: result.newRound
           });
           console.log('[ActiveGame] Game state updated locally with new round data');
         }
