@@ -25,8 +25,9 @@ A web-based implementation of the Wavelength board game with Squid Game-inspired
 npm install
 
 # 2. Setup backend (starts Supabase and applies migrations)
-chmod +x setup.sh
-./setup.sh
+# chmod +x setup.sh
+# ./setup.sh
+npx supabase start
 
 # 3. Start development server
 npm run dev

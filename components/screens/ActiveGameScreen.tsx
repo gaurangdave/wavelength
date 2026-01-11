@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from 'next/navigation';
 import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/lib/store";
-import { useDialUpdates, useRoundUpdates } from "@/lib/hooks/useRealtimeSubscriptions";
+import { useDialUpdates, useRoundUpdates, useGameStateUpdates, usePlayerUpdates, useNewRoundInserts } from "@/lib/hooks/useRealtimeSubscriptions";
 import {
   ConceptPair,
   PsychicHint,
@@ -495,6 +495,33 @@ export default function ActiveGameScreen() {
     handleRoundUpdate
   );
 
+  // Subscribe to game state updates for ALL players to detect round changes
+  const handleGameStateUpdate = useCallback(async () => {
+    console.log('[ActiveGame] Game state updated, reloading...');
+    const { loadGameState } = useGameStore.getState();
+    await loadGameState();
+  }, []);
+
+  useGameStateUpdates(roomId, handleGameStateUpdate);
+
+  // Subscribe to player updates to detect psychic role changes
+  const handlePlayerUpdate = useCallback(async () => {
+    console.log('[ActiveGame] Player updated (possible psychic role change), reloading...');
+    const { loadGameState } = useGameStore.getState();
+    await loadGameState();
+  }, []);
+
+  usePlayerUpdates(playerId, handlePlayerUpdate);
+
+  // Subscribe to new round INSERT events for ALL players
+  const handleNewRound = useCallback(async () => {
+    console.log('[ActiveGame] New round created, reloading game state...');
+    const { loadGameState } = useGameStore.getState();
+    await loadGameState();
+  }, []);
+
+  useNewRoundInserts(roomId, handleNewRound);
+
   // Helper function to update dial position in database
   const updateDialPosition = async (position: number, locked: boolean) => {
     try {
@@ -574,10 +601,41 @@ export default function ActiveGameScreen() {
   const needleAngle = -90 + (dialPosition / 100) * 180;
 
   // Handler for psychic to advance to next round
-  const handleNextRound = () => {
-    const roomCodeToUse = gameData?.roomCode || storeRoomCode;
-    if (roomCodeToUse) {
-      router.push(`/room/${roomCodeToUse}/results`);
+  const handleNextRound = async () => {
+    if (!roomId) return;
+    
+    try {
+      console.log('[ActiveGame] Advancing to next round...');
+      
+      // Call API to rotate psychic and create new round - API returns the new round data
+      const result = await api.advanceRound(roomId);
+      console.log('[ActiveGame] Round advanced successfully:', result);
+      
+      // Update local state with the returned round data
+      if (result && result.newRound) {
+        const { setRoundData } = useGameStore.getState();
+        
+        // Fetch updated game state with new round number and psychic
+        const { data: gameStateData, error: gameStateError } = await supabase
+          .from('game_state')
+          .select()
+          .eq('room_id', roomId)
+          .single();
+          
+        if (gameStateError) {
+          console.error('[ActiveGame] Failed to fetch updated game state:', gameStateError);
+        } else {
+          setRoundData({
+            gameState: gameStateData,
+            currentRound: result.newRound
+          });
+          console.log('[ActiveGame] Game state updated locally with new round data');
+        }
+      }
+      
+      console.log('[ActiveGame] Ready for new round');
+    } catch (err) {
+      console.error('[ActiveGame] Failed to advance round:', err);
     }
   };
 

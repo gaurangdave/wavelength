@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 // These are the default local development URLs for Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -11,9 +11,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
   auth: {
-    autoRefreshToken: true,
+    autoRefreshToken: false,
     persistSession: false,
     detectSessionInUrl: false,
+  },
+  global: {
+    headers: {
+      'Content-Type': 'application/json',
+    },
   },
 })
 
@@ -506,6 +511,17 @@ export async function advanceRound(roomId: string, newLeftConcept: string, newRi
   const newPsychicId = players[nextPsychicIndex].id
 
   console.log('[advanceRound] Rotating psychic from', gameState.current_psychic_id, 'to', newPsychicId)
+
+  // Update players table: remove psychic from all players, then assign to new psychic
+  await supabase
+    .from('players')
+    .update({ is_psychic: false })
+    .eq('room_id', roomId)
+
+  await supabase
+    .from('players')
+    .update({ is_psychic: true })
+    .eq('id', newPsychicId)
 
   // Update game state: increment round and set new psychic
   const { error: updateError } = await supabase

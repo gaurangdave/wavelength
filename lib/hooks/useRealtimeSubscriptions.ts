@@ -339,3 +339,159 @@ export function useRoundUpdates(
     };
   }, [roomId, roundNumber, onRoundUpdate]);
 }
+
+/**
+ * Hook to listen for game state updates (current_round changes)
+ * All players use this to detect when a new round starts
+ */
+export function useGameStateUpdates(
+  roomId: string | undefined,
+  onGameStateUpdate: () => void
+) {
+  const callbackRef = useRef(onGameStateUpdate);
+  
+  // Keep callback ref updated
+  useEffect(() => {
+    callbackRef.current = onGameStateUpdate;
+  }, [onGameStateUpdate]);
+
+  useEffect(() => {
+    if (!roomId) {
+      console.log('[useGameStateUpdates] Skipping - no roomId');
+      return;
+    }
+
+    console.log('[useGameStateUpdates] Setting up subscription for game state updates');
+
+    // Realtime subscription
+    const channel = supabase
+      .channel(`game-state-${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'game_state',
+          filter: `room_id=eq.${roomId}`
+        },
+        (payload) => {
+          console.log('[useGameStateUpdates] ✅ Game state update received:', payload);
+          
+          // Trigger callback to reload game state
+          callbackRef.current();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[useGameStateUpdates] Subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[useGameStateUpdates] ✅ Successfully subscribed to game state updates');
+        }
+      });
+
+    return () => {
+      console.log('[useGameStateUpdates] Cleaning up');
+      supabase.removeChannel(channel);
+    };
+  }, [roomId]);
+}
+
+/**
+ * Hook to listen for player updates (for detecting psychic role changes)
+ * Each player subscribes to changes on their own player record
+ */
+export function usePlayerUpdates(
+  playerId: string | undefined,
+  onPlayerUpdate: () => void
+) {
+  const callbackRef = useRef(onPlayerUpdate);
+  
+  // Keep callback ref updated
+  useEffect(() => {
+    callbackRef.current = onPlayerUpdate;
+  }, [onPlayerUpdate]);
+
+  useEffect(() => {
+    if (!playerId) {
+      console.log('[usePlayerUpdates] Skipping - no playerId');
+      return;
+    }
+
+    console.log('[usePlayerUpdates] Setting up subscription for player updates:', playerId);
+
+    // Realtime subscription
+    const channel = supabase
+      .channel(`player-${playerId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'players',
+          filter: `id=eq.${playerId}`
+        },
+        (payload) => {
+          console.log('[usePlayerUpdates] ✅ Player update received:', payload);
+          
+          // Trigger callback to reload game state
+          callbackRef.current();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[usePlayerUpdates] Subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[usePlayerUpdates] ✅ Successfully subscribed to player updates');
+        }
+      });
+
+    return () => {
+      console.log('[usePlayerUpdates] Cleaning up');
+      supabase.removeChannel(channel);
+    };
+  }, [playerId]);
+}
+
+/**
+ * Hook to listen for new round INSERT events
+ * All players use this to detect when a new round is created
+ */
+export function useNewRoundInserts(
+  roomId: string | undefined,
+  onNewRound: () => void
+) {
+  useEffect(() => {
+    if (!roomId) {
+      console.log('[useNewRoundInserts] Skipping - missing roomId');
+      return;
+    }
+
+    console.log('[useNewRoundInserts] Setting up subscription for new rounds in room:', roomId);
+
+    // Realtime subscription
+    const channel = supabase
+      .channel(`new-rounds-${roomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'rounds',
+          filter: `room_id=eq.${roomId}`
+        },
+        (payload) => {
+          console.log('[useNewRoundInserts] New round created:', payload);
+          onNewRound();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[useNewRoundInserts] Subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[useNewRoundInserts] ✅ Successfully subscribed to new round inserts');
+        }
+      });
+
+    return () => {
+      console.log('[useNewRoundInserts] Cleaning up');
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, onNewRound]);
+}
