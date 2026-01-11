@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
       }
 
       if (lives === undefined) {
-        lives = room.settings.numberOfLives || 3;
+        const settings = room.settings as { numberOfLives?: number };
+        lives = settings?.numberOfLives || 3;
       }
 
       // Get current psychic if not provided

@@ -86,6 +86,9 @@ interface GameStore {
   updateGameState: (gameState: Partial<RoundData['gameState']>) => void;
   updateCurrentRound: (round: Partial<RoundData['round']>) => void;
   
+  // Round management
+  advanceToNextRound: (router: any) => Promise<void>;
+  
   // Navigation actions
   resetGame: () => void;
   backToMenu: () => void;
@@ -339,6 +342,82 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
       }
     });
     console.log(`[Store] Updated target position to ${targetPosition}`);
+  },
+
+  // Round management
+  advanceToNextRound: async (router) => {
+    const state = get();
+    const gameData = state.gameData;
+    const roundData = state.roundData;
+    
+    if (!gameData || !roundData) {
+      console.error('[Store] Cannot advance round: missing game data');
+      return;
+    }
+    
+    const roomCode = gameData.roomCode || state.roomCode;
+    const currentRound = roundData.gameState.current_round;
+    const maxRounds = gameData.gameSettings.numberOfRounds;
+    
+    try {
+      console.log('[Store] Advancing to next round...');
+      
+      // Check if game is finished
+      if (currentRound >= maxRounds) {
+        console.log('[Store] Game complete - redirecting to lobby');
+        if (roomCode) {
+          router.push(`/room/${roomCode}`);
+        }
+        return;
+      }
+      
+      // Call API to advance round (will rotate psychic and create new round)
+      const result = await api.advanceRound(gameData.roomId);
+      console.log('[Store] Round advanced successfully:', result);
+      
+      // Navigate back to play screen for next round
+      if (roomCode) {
+        router.push(`/room/${roomCode}/play`);
+      }
+    } catch (err) {
+      console.error('[Store] Failed to advance round:', err);
+      throw err;
+    }
+  },
+
+  // Direct update methods for realtime subscriptions
+  setRoundData: (roundData) => {
+    set({ roundData });
+  },
+  
+  updateGameState: (gameState) => {
+    const current = get().roundData;
+    if (current) {
+      set({
+        roundData: {
+          ...current,
+          gameState: {
+            ...current.gameState,
+            ...gameState
+          }
+        }
+      });
+    }
+  },
+  
+  updateCurrentRound: (round) => {
+    const current = get().roundData;
+    if (current) {
+      set({
+        roundData: {
+          ...current,
+          round: {
+            ...current.round,
+            ...round
+          }
+        }
+      });
+    }
   },
 
   // Navigation Actions

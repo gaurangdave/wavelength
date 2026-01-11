@@ -98,7 +98,7 @@ export default function JoinRoomForm() {
   return (
     <ScreenContainer>
       <GeometricBackground />
-      <CornerAccents color="psychic" />
+      <CornerAccents variant="psychic" />
       
       <div className="relative z-10 w-full max-w-2xl mx-auto">
         <GameCard variant="psychic" className="p-8 lg:p-12">
@@ -156,7 +156,7 @@ export default function JoinRoomForm() {
             <RoomCodeDisplay code={roomCode} />
 
             {/* Error Message */}
-            {error && <ErrorMessage>{error}</ErrorMessage>}
+            {error && <ErrorMessage message={error} />}
 
             {/* Action Buttons */}
             <div className="space-y-4 pt-6">
@@ -164,8 +164,6 @@ export default function JoinRoomForm() {
                 type="submit"
                 disabled={!isFormValid || isLoading}
                 variant="primary"
-                size="large"
-                fullWidth
               >
                 {isLoading ? 'JOINING...' : 'JOIN GAME'}
               </Button>
@@ -175,8 +173,6 @@ export default function JoinRoomForm() {
                 onClick={handleBackToMenu}
                 disabled={isLoading}
                 variant="secondary"
-                size="medium"
-                fullWidth
               >
                 ← BACK TO MENU
               </Button>
@@ -186,13 +182,13 @@ export default function JoinRoomForm() {
           {/* Status Indicators */}
           {isFormValid && !isLoading && (
             <div className="text-center mt-6">
-              <StatusIndicator status="ready">READY TO JOIN</StatusIndicator>
+              <StatusIndicator type="waiting" text="READY TO JOIN" />
             </div>
           )}
 
           {isLoading && (
             <div className="text-center mt-6">
-              <StatusIndicator status="connecting">CONNECTING TO ROOM...</StatusIndicator>
+              <StatusIndicator type="loading" text="CONNECTING TO ROOM..." />
             </div>
           )}
         </GameCard>

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from 'next/navigation';
-import { supabase } from "@/lib/supabase";
 import { useGameStore } from "@/lib/store";
 import { useDialUpdates, useRoundUpdates, useGameStateUpdates, usePlayerUpdates, useNewRoundInserts } from "@/lib/hooks/useRealtimeSubscriptions";
 import {
@@ -10,8 +9,12 @@ import {
   PsychicHint,
   DialNeedle
 } from "@/components/ui/GameComponents";
+import { GameHUD } from "@/components/ui/GameHUD";
+import { PlayerStatusBar } from "@/components/ui/PlayerStatusBar";
+import { ActionButton } from "@/components/ui/ActionButton";
 import { createDialGradient } from "@/lib/theme";
 import * as api from "@/lib/api-client";
+import { actions } from "@/lib/actions";
 
 // Extend Window interface for throttling
 declare global {
@@ -31,92 +34,6 @@ interface OtherPlayerDial {
   playerName: string;
   position: number;
   isLocked: boolean;
-}
-
-// HUD Display Component
-interface GameHUDProps {
-  roomName: string;
-  round: number;
-  maxRounds: number;
-  score: number;
-  lives: number;
-  maxLives: number;
-}
-
-function GameHUD({ roomName, round, maxRounds, score, lives, maxLives }: GameHUDProps) {
-  return (
-    <div className="bg-zinc-900 border-b-2 border-zinc-700 px-6 py-4 flex justify-between items-center">
-      <div className="flex items-center space-x-6">
-        <h1 className="text-xl font-bold text-white tracking-wider uppercase">
-          {roomName}
-        </h1>
-        <div className="text-fuchsia-400 font-medium tracking-wide">
-          ROUND {round}/{maxRounds}
-        </div>
-      </div>
-
-      <div className="flex items-center space-x-6">
-        <div className="flex items-center space-x-2">
-          <span className="text-teal-400 font-bold tracking-wide">SCORE:</span>
-          <span className="text-white text-xl font-bold">{score}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <span className="text-fuchsia-400 font-bold tracking-wide">LIVES:</span>
-          <div className="flex space-x-1">
-            {Array.from({ length: maxLives }, (_, i) => (
-              <div
-                key={i}
-                className={`text-xl ${i < lives ? "text-fuchsia-500" : "text-zinc-600"}`}
-              >
-                ♥
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Player Status Footer Component
-interface PlayerStatusBarProps {
-  players: Player[];
-}
-
-function PlayerStatusBar({ players }: PlayerStatusBarProps) {
-  return (
-    <div className="bg-zinc-900 border-t-2 border-zinc-700 px-6 py-4">
-      <div className="max-w-4xl mx-auto flex items-center justify-center space-x-6">
-        <div className="text-gray-400 text-sm font-bold tracking-widest uppercase">
-          PARTICIPANTS:
-        </div>
-        <div className="flex space-x-4">
-          {players.map((player) => (
-            <div
-              key={player.id}
-              className={`
-                flex items-center space-x-2 px-3 py-2 border-2 bg-zinc-800
-                ${player.isPsychic
-                  ? "border-teal-500 text-teal-400 shadow-[0_0_10px_rgba(20,184,166,0.3)]"
-                  : "border-zinc-600 text-white"
-                }
-              `}
-            >
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  player.isPsychic ? "bg-teal-400" : "bg-zinc-500"
-                }`}
-              ></div>
-              <span className="text-sm font-medium">{player.name}</span>
-              {player.isPsychic && (
-                <span className="text-xs uppercase">(PSYCHIC)</span>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // Dial Position Indicator Component
@@ -180,7 +97,6 @@ export default function ActiveGameScreen() {
   );
   const [totalPlayers, setTotalPlayers] = useState(0);
   const [allPlayersLocked, setAllPlayersLocked] = useState(false);
-  const [showPsychicResults, setShowPsychicResults] = useState(false);
 
   // Extract values with fallbacks for hook dependencies
   const roomId = gameData?.roomId || "";
@@ -199,7 +115,6 @@ export default function ActiveGameScreen() {
       setTargetSet(false);
       setOtherPlayerDials([]);
       setAllPlayersLocked(false);
-      setShowPsychicResults(false);
     }
   }, [round]);
 
@@ -231,17 +146,8 @@ export default function ActiveGameScreen() {
       }
 
       try {
-        const { count, error } = await supabase
-          .from("players")
-          .select("id", { count: "exact", head: true })
-          .eq("room_id", roomId);
-
-        if (error) {
-          console.error("[ActiveGame] Error fetching player count:", error);
-          throw error;
-        }
-        
-        setTotalPlayers(count || 0);
+        const count = await actions.getPlayerCount(roomId);
+        setTotalPlayers(count);
         console.log("[ActiveGame] Total players in room:", count);
       } catch (err) {
         console.error("Failed to fetch player count:", err);
@@ -444,20 +350,14 @@ export default function ActiveGameScreen() {
       );
       setAllPlayersLocked(true);
 
-      // For psychic: show results inline with next round button
-      // For non-psychic: auto-navigate to results screen
-      if (isPsychic) {
-        console.log("[ActiveGame] Showing results to psychic");
-        setShowPsychicResults(true);
-      } else {
-        const roomCodeToUse = gameData?.roomCode || storeRoomCode;
-        setTimeout(() => {
-          console.log("[ActiveGame] Transitioning to results screen");
-          if (roomCodeToUse) {
-            router.push(`/room/${roomCodeToUse}/results`);
-          }
-        }, 2000);
-      }
+      // Navigate ALL players (including psychic) to results screen
+      const roomCodeToUse = gameData?.roomCode || storeRoomCode;
+      setTimeout(() => {
+        console.log("[ActiveGame] Transitioning to results screen");
+        if (roomCodeToUse) {
+          router.push(`/room/${roomCodeToUse}/results`);
+        }
+      }, 2000);
     }
   }, [
     otherPlayerDials,
@@ -526,18 +426,13 @@ export default function ActiveGameScreen() {
   // Helper function to update dial position in database
   const updateDialPosition = async (position: number, locked: boolean) => {
     try {
-      await supabase.from("dial_updates").upsert(
-        {
-          room_id: roomId,
-          round_number: round,
-          player_id: playerId,
-          dial_position: position,
-          is_locked: locked,
-        },
-        {
-          onConflict: "room_id,round_number,player_id",
-        }
-      );
+      await actions.updateDialPosition({
+        roomId,
+        roundNumber: round,
+        playerId,
+        dialPosition: position,
+        isLocked: locked,
+      });
     } catch (err) {
       console.error("Failed to update dial position:", err);
     }
@@ -595,48 +490,6 @@ export default function ActiveGameScreen() {
       console.log(`[PSYCHIC] Target position set successfully`);
     } catch (err) {
       console.error("Failed to set target position:", err);
-    }
-  };
-
-  // Calculate needle angle (-90 to 90 degrees for semicircle)
-  const needleAngle = -90 + (dialPosition / 100) * 180;
-
-  // Handler for psychic to advance to next round
-  const handleNextRound = async () => {
-    if (!roomId) return;
-    
-    try {
-      console.log('[ActiveGame] Advancing to next round...');
-      
-      // Call API to rotate psychic and create new round - API returns the new round data
-      const result = await api.advanceRound(roomId);
-      console.log('[ActiveGame] Round advanced successfully:', result);
-      
-      // Update local state with the returned round data
-      if (result && result.newRound) {
-        const { setRoundData } = useGameStore.getState();
-        
-        // Fetch updated game state with new round number and psychic
-        const { data: gameStateData, error: gameStateError } = await supabase
-          .from('game_state')
-          .select()
-          .eq('room_id', roomId)
-          .single();
-          
-        if (gameStateError) {
-          console.error('[ActiveGame] Failed to fetch updated game state:', gameStateError);
-        } else {
-          setRoundData({
-            gameState: gameStateData,
-            round: result.newRound
-          });
-          console.log('[ActiveGame] Game state updated locally with new round data');
-        }
-      }
-      
-      console.log('[ActiveGame] Ready for new round');
-    } catch (err) {
-      console.error('[ActiveGame] Failed to advance round:', err);
     }
   };
 
@@ -783,123 +636,40 @@ export default function ActiveGameScreen() {
       {/* Action Area */}
       <div className="px-6 py-8">
         <div className="max-w-2xl mx-auto">
-          {isPsychic && showPsychicResults ? (
-            // Psychic results view with player scores
-            <div className="space-y-6">
-              <div className="bg-zinc-900 border-2 border-teal-500 p-6">
-                <h2 className="text-2xl font-bold text-teal-400 mb-4 uppercase tracking-wider">
-                  All Players Locked In - Results
-                </h2>
-                <div className="space-y-3">
-                  {otherPlayerDials.map((player) => {
-                    const distance = Math.abs(player.position - targetPos);
-                    const score = Math.max(0, 100 - distance);
-                    return (
-                      <div
-                        key={player.playerId}
-                        className="bg-zinc-800 border border-zinc-700 p-4 flex justify-between items-center"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="w-3 h-3 bg-fuchsia-500 rounded-full"></div>
-                          <span className="text-white font-medium">{player.playerName}</span>
-                        </div>
-                        <div className="flex items-center space-x-6">
-                          <div className="text-gray-400">
-                            Guess: <span className="text-white font-bold">{Math.round(player.position)}%</span>
-                          </div>
-                          <div className="text-gray-400">
-                            Distance: <span className="text-fuchsia-400 font-bold">{Math.round(distance)}</span>
-                          </div>
-                          <div className="text-teal-400 font-bold text-xl">
-                            +{Math.round(score)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 pt-4 border-t border-zinc-700 text-center">
-                  <div className="text-gray-400">
-                    Target Position: <span className="text-teal-400 font-bold text-xl">{Math.round(targetPos)}%</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={handleNextRound}
-                className="w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest transition-all duration-300 border-2 relative overflow-hidden bg-gradient-to-r from-teal-600 to-teal-700 border-teal-500 text-white hover:from-teal-500 hover:to-teal-600 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] cursor-pointer"
-              >
-                Next Round →
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
-              </button>
-            </div>
-          ) : isPsychic ? (
+          {isPsychic ? (
             // Psychic buttons - set target position or random
             <div className="flex gap-4">
-              <button
+              <ActionButton
                 onClick={handleSetTarget}
                 disabled={targetSet}
-                className={`
-                  flex-1 py-6 px-8 text-3xl font-bold uppercase tracking-widest
-                  transition-all duration-300 border-2 relative overflow-hidden
-                  ${
-                    targetSet
-                      ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
-                      : "bg-gradient-to-r from-teal-600 to-teal-700 border-teal-500 text-white hover:from-teal-500 hover:to-teal-600 hover:shadow-[0_0_40px_rgba(20,184,166,0.6)] cursor-pointer"
-                  }
-                `}
+                variant="teal"
+                fullWidth={true}
               >
                 {targetSet ? "TARGET SET - WAITING FOR PLAYERS" : "SET TARGET POSITION"}
-                {!targetSet && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
-                )}
-              </button>
-              <button
+              </ActionButton>
+              <ActionButton
                 onClick={handleSetRandomTarget}
                 disabled={targetSet}
-                className={`
-                  flex-1 py-6 px-8 text-3xl font-bold uppercase tracking-widest
-                  transition-all duration-300 border-2 relative overflow-hidden
-                  ${
-                    targetSet
-                      ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
-                      : "bg-gradient-to-r from-purple-600 to-purple-700 border-purple-500 text-white hover:from-purple-500 hover:to-purple-600 hover:shadow-[0_0_40px_rgba(168,85,247,0.6)] cursor-pointer"
-                  }
-                `}
+                variant="purple"
+                fullWidth={true}
               >
                 {targetSet ? "TARGET SET" : "RANDOM TARGET"}
-                {!targetSet && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
-                )}
-              </button>
+              </ActionButton>
             </div>
           ) : !targetSet ? (
             // Non-psychic waiting for target
-            <button
-              disabled
-              className="w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest transition-all duration-300 border-2 relative overflow-hidden bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
-            >
+            <ActionButton disabled>
               WAITING FOR PSYCHIC TO SET TARGET...
-            </button>
+            </ActionButton>
           ) : (
             // Non-psychic guessing
-            <button
+            <ActionButton
               onClick={handleLockIn}
               disabled={isLocked}
-              className={`
-                w-full py-6 px-8 text-3xl font-bold uppercase tracking-widest
-                transition-all duration-300 border-2 relative overflow-hidden
-                ${
-                  isLocked
-                    ? "bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed"
-                    : "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 border-fuchsia-500 text-white hover:from-fuchsia-500 hover:to-fuchsia-600 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)] cursor-pointer"
-                }
-              `}
+              variant="fuchsia"
             >
               {isLocked ? "GUESS LOCKED IN" : "LOCK IN GUESS"}
-              {!isLocked && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-pulse"></div>
-              )}
-            </button>
+            </ActionButton>
           )}
         </div>
       </div>

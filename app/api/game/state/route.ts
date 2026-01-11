@@ -22,17 +22,22 @@ export async function GET(request: NextRequest) {
 
     if (stateError) throw stateError;
 
-    // Fetch current round
-    const { data: currentRound, error: roundError } = await supabase
-      .from('rounds')
-      .select()
-      .eq('room_id', roomId)
-      .eq('round_number', gameState.current_round)
-      .single();
+    // Fetch current round (only if current_round is not null)
+    let currentRound = null;
+    if (gameState.current_round !== null) {
+      const { data, error: roundError } = await supabase
+        .from('rounds')
+        .select()
+        .eq('room_id', roomId)
+        .eq('round_number', gameState.current_round)
+        .single();
 
-    if (roundError && roundError.code !== 'PGRST116') {
-      // PGRST116 is "not found" which is okay for the first round
-      throw roundError;
+      if (roundError && roundError.code !== 'PGRST116') {
+        // PGRST116 is "not found" which is okay for the first round
+        throw roundError;
+      }
+      
+      currentRound = data;
     }
 
     return NextResponse.json({

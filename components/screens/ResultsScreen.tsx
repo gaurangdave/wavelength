@@ -2,177 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/lib/store';
-import { createDialGradient } from '@/lib/theme';
-import { DialNeedle } from '@/components/ui/GameComponents';
-import * as api from '@/lib/api-client';
+import { ActionButton } from '@/components/ui/ActionButton';
+import { actions } from '@/lib/actions';
+import { GameHUD } from '@/components/ui/GameHUD';
+import { ResultsDial } from '@/components/ui/ResultsDial';
+import { PlayerScoresTable } from '@/components/ui/PlayerScoresTable';
 
+// Local interface matching component's usage
 interface PlayerGuess {
   playerId: string;
   playerName: string;
   position: number;
   distance: number;
   points: number;
-}
-
-// HUD Component (reused from ActiveGameScreen pattern)
-interface GameHUDProps {
-  roomName: string;
-  round: number;
-  maxRounds: number;
-  score: number;
-  lives: number;
-  maxLives: number;
-  isResults?: boolean;
-}
-
-function GameHUD({ roomName, round, maxRounds, score, lives, maxLives, isResults }: GameHUDProps) {
-  return (
-    <div className="bg-zinc-900 border-b-2 border-zinc-700 px-6 py-4 flex justify-between items-center">
-      <div className="flex items-center space-x-6">
-        <h1 className="text-xl font-bold text-white tracking-wider uppercase">
-          {roomName}
-        </h1>
-        <div className="text-fuchsia-400 font-medium tracking-wide">
-          ROUND {round}/{maxRounds}{isResults ? ' - RESULTS' : ''}
-        </div>
-      </div>
-
-      <div className="flex items-center space-x-6">
-        <div className="flex items-center space-x-2">
-          <span className="text-teal-400 font-bold tracking-wide">SCORE:</span>
-          <span className="text-white text-xl font-bold">{score}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <span className="text-fuchsia-400 font-bold tracking-wide">LIVES:</span>
-          <div className="flex space-x-1">
-            {Array.from({ length: maxLives }, (_, i) => (
-              <div key={i} className={`text-xl ${i < lives ? 'text-fuchsia-500' : 'text-zinc-600'}`}>
-                ♥
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Results Dial Visualization Component
-interface ResultsDialProps {
-  playerGuesses: PlayerGuess[];
-  targetPosition: number;
-  leftConcept: string;
-  rightConcept: string;
-}
-
-function ResultsDial({ playerGuesses, targetPosition, leftConcept, rightConcept }: ResultsDialProps) {
-  const colors = ['rgb(236, 72, 153)', 'rgb(59, 130, 246)', 'rgb(34, 197, 94)', 'rgb(168, 85, 247)'];
-
-  return (
-    <div className="mb-12">
-      <div className="relative w-full max-w-2xl mx-auto">
-        <div className="relative w-full max-w-[500px] h-[250px] mx-auto">
-          {/* Semicircle with gradient */}
-          <div 
-            className="absolute w-full h-full rounded-t-full overflow-hidden shadow-2xl"
-            style={{
-              background: createDialGradient(targetPosition),
-              boxShadow: 'inset 0 5px 15px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5)'
-            }}
-          >
-            <div className="absolute inset-0 rounded-t-full border-2 border-zinc-700" 
-                 style={{ borderBottom: 'none' }}></div>
-            
-            {/* All player needles */}
-            {playerGuesses.map((guess, index) => {
-              const color = colors[index % colors.length];
-              
-              return (
-                <DialNeedle
-                  key={guess.playerId}
-                  position={guess.position}
-                  color={color}
-                  showPivot={false}
-                  height={180}
-                  width={1.5}
-                />
-              );
-            })}
-
-            {/* Target indicator */}
-            <DialNeedle
-              position={targetPosition}
-              color="rgb(255, 255, 255)"
-              showPivot={false}
-              height={200}
-              width={2}
-              opacity={0.9}
-            />
-          </div>
-        </div>
-
-        {/* Labels */}
-        <div className="absolute top-0 left-0 right-0 flex justify-between items-center px-4 -mt-4">
-          <div className="text-lg font-bold text-teal-400 tracking-wider uppercase">
-            {leftConcept}
-          </div>
-          <div className="text-lg font-bold text-teal-400 tracking-wider uppercase">
-            {rightConcept}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Player Scores Table Component
-interface PlayerScoresProps {
-  playerGuesses: PlayerGuess[];
-  loading: boolean;
-}
-
-function PlayerScoresTable({ playerGuesses, loading }: PlayerScoresProps) {
-  const colors = ['border-fuchsia-500', 'border-blue-500', 'border-green-500', 'border-purple-500'];
-
-  return (
-    <div className="bg-zinc-900 border-2 border-zinc-700 p-6 mb-8">
-      <h3 className="text-xl font-bold text-white tracking-wider uppercase mb-4 text-center">
-        Player Scores
-      </h3>
-      <div className="space-y-2">
-        {loading ? (
-          <div className="text-center text-gray-400">Loading results...</div>
-        ) : playerGuesses.length === 0 ? (
-          <div className="text-center text-gray-400">No guesses recorded</div>
-        ) : (
-          playerGuesses.map((guess, index) => {
-            const borderColor = colors[index % colors.length];
-            
-            return (
-              <div 
-                key={guess.playerId}
-                className={`flex items-center justify-between p-4 bg-zinc-800 border-2 ${borderColor}`}
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="text-2xl font-bold text-white">#{index + 1}</div>
-                  <div>
-                    <div className="font-bold text-white">{guess.playerName}</div>
-                    <div className="text-sm text-gray-400">Position: {Math.round(guess.position)}%</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-yellow-400">+{guess.points}</div>
-                  <div className="text-sm text-gray-400">Distance: {Math.round(guess.distance)}%</div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
 }
 
 export default function ResultsScreen() {
@@ -188,31 +31,10 @@ export default function ResultsScreen() {
   const [advancingRound, setAdvancingRound] = useState(false);
 
   const handleNextRound = async () => {
-    if (!gameData) return;
-    
-    const roomCodeToUse = gameData?.roomCode || storeRoomCode;
-    
     try {
       setAdvancingRound(true);
-      console.log('[ResultsScreen] Advancing to next round...');
-      
-      // Check if game is finished
-      if (round >= maxRounds) {
-        console.log('[ResultsScreen] Game complete - redirecting to lobby');
-        if (roomCodeToUse) {
-          router.push(`/room/${roomCodeToUse}`);
-        }
-        return;
-      }
-      
-      // Call API to advance round (will rotate psychic and create new round)
-      const result = await api.advanceRound(gameData.roomId);
-      console.log('[ResultsScreen] Round advanced:', result);
-      
-      // Navigate back to play screen for next round
-      if (roomCodeToUse) {
-        router.push(`/room/${roomCodeToUse}/play`);
-      }
+      const { advanceToNextRound } = useGameStore.getState();
+      await advanceToNextRound(router);
     } catch (err) {
       console.error('[ResultsScreen] Failed to advance round:', err);
       setAdvancingRound(false);
@@ -233,6 +55,7 @@ export default function ResultsScreen() {
     const roomId = gameData.roomId;
     const round = roundData.gameState.current_round;
     const targetPosition = roundData.round.target_position;
+    const maxPoints = gameData.gameSettings.maxPoints;
     
     if (targetPosition === null || targetPosition === undefined) {
       console.error('[ResultsScreen] Target position is null - cannot calculate scores');
@@ -242,62 +65,23 @@ export default function ResultsScreen() {
     
     const fetchGuesses = async () => {
       try {
-        const { data: dialData, error: dialError } = await supabase
-          .from('dial_updates')
-          .select('player_id, dial_position')
-          .eq('room_id', roomId)
-          .eq('round_number', round)
-          .eq('is_locked', true);
+        const guesses = await actions.getLockedGuessesWithScores(
+          roomId,
+          round,
+          targetPosition,
+          maxPoints
+        );
 
-        if (dialError) throw dialError;
+        // Map to component's interface (position vs dialPosition)
+        const mappedGuesses: PlayerGuess[] = guesses.map(g => ({
+          playerId: g.playerId,
+          playerName: g.playerName,
+          position: g.dialPosition,
+          distance: g.distance,
+          points: g.points,
+        }));
 
-        if (!dialData || dialData.length === 0) {
-          console.log('[ResultsScreen] No locked guesses found');
-          setPlayerGuesses([]);
-          setLoading(false);
-          return;
-        }
-
-        // Fetch player names
-        const playerIds = dialData?.map(d => d.player_id) || [];
-        const { data: playersData, error: playersError } = await supabase
-          .from('players')
-          .select('id, player_name')
-          .in('id', playerIds);
-
-        if (playersError) throw playersError;
-
-        // Calculate distances and points
-        const guesses = dialData?.map(dial => {
-          const player = playersData?.find(p => p.id === dial.player_id);
-          const distance = Math.abs(dial.dial_position - targetPosition);
-          let points = 0;
-          
-          // Scoring zones based on distance from target
-          if (distance <= 5) points = 4; // Perfect (within 5%)
-          else if (distance <= 10) points = 3; // Great (within 10%)
-          else if (distance <= 20) points = 2; // Good (within 20%)
-          else if (distance <= 30) points = 1; // Close (within 30%)
-          else points = 0; // Miss
-          
-          console.log('[ResultsScreen] Player:', player?.player_name, 'Position:', dial.dial_position, 'Target:', targetPosition, 'Distance:', distance, 'Points:', points);
-          
-          return {
-            playerId: dial.player_id,
-            playerName: player?.player_name || 'Unknown',
-            position: dial.dial_position,
-            distance,
-            points
-          };
-        }) || [];
-
-        // Sort by points (highest first), then by distance (closest first)
-        guesses.sort((a, b) => {
-          if (b.points !== a.points) return b.points - a.points;
-          return a.distance - b.distance;
-        });
-        
-        setPlayerGuesses(guesses);
+        setPlayerGuesses(mappedGuesses);
         setLoading(false);
       } catch (err) {
         console.error('Failed to fetch guesses:', err);
@@ -375,14 +159,12 @@ export default function ResultsScreen() {
 
           {/* Next Round Button */}
           <div className="text-center">
-            <button
+            <ActionButton
               onClick={handleNextRound}
               disabled={advancingRound}
-              className={`px-12 py-6 border-2 text-white text-2xl font-bold uppercase tracking-widest transition-all duration-300 ${
-                advancingRound
-                  ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
-                  : 'bg-fuchsia-600 border-fuchsia-500 hover:bg-fuchsia-700 hover:shadow-[0_0_40px_rgba(236,72,153,0.6)]'
-              }`}
+              variant="primary"
+              fullWidth={false}
+              className="px-12"
             >
               {advancingRound 
                 ? 'STARTING NEXT ROUND...' 
@@ -390,7 +172,7 @@ export default function ResultsScreen() {
                   ? 'FINISH GAME' 
                   : 'NEXT ROUND'
               }
-            </button>
+            </ActionButton>
           </div>
         </div>
       </div>

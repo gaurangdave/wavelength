@@ -112,12 +112,14 @@ export function useDialUpdates(
         if (error) throw error;
         
         if (data) {
-          const dials = data.map(d => ({
-            playerId: d.player_id,
-            playerName: 'Player',
-            position: d.dial_position,
-            isLocked: d.is_locked
-          }));
+          const dials = data
+            .filter(d => d.player_id !== null && d.is_locked !== null)
+            .map(d => ({
+              playerId: d.player_id!,
+              playerName: 'Player',
+              position: d.dial_position,
+              isLocked: d.is_locked!
+            }));
           callbackRef.current(dials);
         }
       } catch (err) {
@@ -212,7 +214,16 @@ export function usePlayerListUpdates(
         
         console.log('[usePlayerListUpdates] Fetched players:', data);
         if (data) {
-          callbackRef.current(data);
+          const players = data
+            .filter(p => p.is_host !== null && p.is_psychic !== null && p.is_connected !== null)
+            .map(p => ({
+              id: p.id,
+              player_name: p.player_name,
+              is_host: p.is_host!,
+              is_psychic: p.is_psychic!,
+              is_connected: p.is_connected!
+            }));
+          callbackRef.current(players);
         }
       } catch (err) {
         console.error('[usePlayerListUpdates] Failed to fetch players:', err);

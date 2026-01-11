@@ -190,7 +190,7 @@ export default function GameWaitingRoom() {
   return (
     <ScreenContainer>
       <GeometricBackground />
-      <CornerAccents color="mixed" />
+      <CornerAccents variant="psychic" />
 
       {/* Main Content */}
       <div className="relative z-10 max-w-4xl mx-auto px-4 py-8">
@@ -283,8 +283,6 @@ export default function GameWaitingRoom() {
           <Button
             onClick={handleBackToMenu}
             variant="secondary"
-            size="medium"
-            fullWidth
           >
             ← BACK TO MENU
           </Button>
@@ -293,7 +291,7 @@ export default function GameWaitingRoom() {
         {/* Status Messages */}
         <div className="text-center mt-8">
           {isGameReady && selectedPsychic ? (
-            <StatusIndicator status="ready">READY TO COMMENCE</StatusIndicator>
+            <StatusIndicator type="waiting" text="READY TO COMMENCE" />
           ) : (
             <div className="text-gray-500 text-sm font-medium tracking-wide uppercase">
               {!selectedPsychic ? 'Assign a Psychic to continue' : `Need at least 2 players (${players.length}/2)`}

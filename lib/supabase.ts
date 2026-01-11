@@ -1,10 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Database } from './database.types'
+
+type Json = Database['public']['Tables']['game_rooms']['Row']['settings']
 
 // These are the default local development URLs for Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   realtime: {
     params: {
       eventsPerSecond: 10,
@@ -91,160 +94,6 @@ export interface DialUpdate {
   created_at: string
 }
 
-export type Database = {
-  public: {
-    Tables: {
-      messages: {
-        Row: {
-          id: number
-          content: string
-          created_at: string
-        }
-        Insert: {
-          id?: number
-          content: string
-          created_at?: string
-        }
-        Update: {
-          id?: number
-          content?: string
-          created_at?: string
-        }
-      }
-      rooms: {
-        Row: {
-          id: string
-          name: string
-          creator_name: string
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          creator_name: string
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          creator_name?: string
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      participants: {
-        Row: {
-          id: string
-          room_id: string
-          user_name: string
-          peer_id: string
-          is_connected: boolean
-          joined_at: string
-          last_seen: string
-        }
-        Insert: {
-          id?: string
-          room_id: string
-          user_name: string
-          peer_id: string
-          is_connected?: boolean
-          joined_at?: string
-          last_seen?: string
-        }
-        Update: {
-          id?: string
-          room_id?: string
-          user_name?: string
-          peer_id?: string
-          is_connected?: boolean
-          joined_at?: string
-          last_seen?: string
-        }
-      }
-      signaling: {
-        Row: {
-          id: string
-          room_id: string
-          from_peer_id: string
-          to_peer_id: string | null
-          type: 'offer' | 'answer' | 'ice-candidate'
-          payload: Json
-          is_consumed: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          room_id: string
-          from_peer_id: string
-          to_peer_id?: string | null
-          type: 'offer' | 'answer' | 'ice-candidate'
-          payload: Json
-          is_consumed?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          room_id?: string
-          from_peer_id?: string
-          to_peer_id?: string | null
-          type?: 'offer' | 'answer' | 'ice-candidate'
-          payload?: Json
-          is_consumed?: boolean
-          created_at?: string
-        }
-      }
-      game_rooms: {
-        Row: GameRoom
-        Insert: Omit<GameRoom, 'id' | 'created_at' | 'updated_at'> & {
-          id?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: Partial<Omit<GameRoom, 'id' | 'created_at' | 'updated_at'>>
-      }
-      players: {
-        Row: Player
-        Insert: Omit<Player, 'id' | 'joined_at' | 'last_seen'> & {
-          id?: string
-          joined_at?: string
-          last_seen?: string
-        }
-        Update: Partial<Omit<Player, 'id' | 'joined_at' | 'last_seen'>>
-      }
-      game_state: {
-        Row: GameState
-        Insert: Omit<GameState, 'id' | 'updated_at'> & {
-          id?: string
-          updated_at?: string
-        }
-        Update: Partial<Omit<GameState, 'id' | 'updated_at'>>
-      }
-      rounds: {
-        Row: Round
-        Insert: Omit<Round, 'id' | 'created_at' | 'updated_at'> & {
-          id?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: Partial<Omit<Round, 'id' | 'created_at' | 'updated_at'>>
-      }
-      dial_updates: {
-        Row: DialUpdate
-        Insert: Omit<DialUpdate, 'id' | 'created_at'> & {
-          id?: string
-          created_at?: string
-        }
-        Update: Partial<Omit<DialUpdate, 'id' | 'created_at'>>
-      }
-    }
-  }
-}
-
 // Helper functions for game management
 export async function createGameRoom(roomName: string, roomCode: string, settings: GameSettings) {
   const { data, error } = await supabase
@@ -253,14 +102,17 @@ export async function createGameRoom(roomName: string, roomCode: string, setting
       room_code: roomCode,
       room_name: roomName,
       status: 'waiting',
-      settings,
+      settings: settings as unknown as Json,
       host_player_id: null
     })
     .select()
     .single()
 
   if (error) throw error
-  return data as GameRoom
+  return {
+    ...data,
+    settings: data.settings as unknown as GameSettings
+  } as GameRoom
 }
 
 export async function joinGameRoom(roomCode: string, playerName: string, peerId: string, isHost: boolean = false) {
@@ -297,7 +149,13 @@ export async function joinGameRoom(roomCode: string, playerName: string, peerId:
       .eq('id', room.id)
   }
 
-  return { room: room as GameRoom, player: player as Player }
+  return { 
+    room: {
+      ...room,
+      settings: room.settings as unknown as GameSettings
+    } as GameRoom, 
+    player: player as Player 
+  }
 }
 
 export async function getGameRoom(roomCode: string) {
@@ -435,7 +293,12 @@ export async function lockDialPosition(
 
   if (fetchError) throw fetchError
 
-  const lockedPositions = round.locked_positions || []
+  const lockedPositions = (round.locked_positions as Array<{
+    playerId: string;
+    playerName: string;
+    position: number;
+    lockedAt: string;
+  }>) || []
   lockedPositions.push({
     playerId,
     playerName,
@@ -475,8 +338,8 @@ export async function updateGameScore(roomId: string, scoreChange: number, lives
   const { error } = await supabase
     .from('game_state')
     .update({
-      team_score: gameState.team_score + scoreChange,
-      lives_remaining: Math.max(0, gameState.lives_remaining + livesChange)
+      team_score: (gameState.team_score || 0) + scoreChange,
+      lives_remaining: Math.max(0, (gameState.lives_remaining || 0) + livesChange)
     })
     .eq('room_id', roomId)
 
@@ -527,7 +390,7 @@ export async function advanceRound(roomId: string, newLeftConcept: string, newRi
   const { error: updateError } = await supabase
     .from('game_state')
     .update({ 
-      current_round: gameState.current_round + 1,
+      current_round: (gameState.current_round || 0) + 1,
       current_psychic_id: newPsychicId
     })
     .eq('room_id', roomId)
@@ -537,7 +400,7 @@ export async function advanceRound(roomId: string, newLeftConcept: string, newRi
   // Create new round with new concepts (target_position will be null until psychic sets it)
   const newRound = await createRound(
     roomId,
-    gameState.current_round + 1,
+    (gameState.current_round || 0) + 1,
     newLeftConcept,
     newRightConcept,
     null // Psychic will set target position
