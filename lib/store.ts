@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, devtools } from 'zustand/middleware';
 import * as api from './api-client';
 
 export type Screen = 'welcome' | 'main-menu' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'results';
@@ -96,7 +96,9 @@ interface GameStore {
   goToJoinRoom: () => void;
 }
 
-export const useGameStore = create<GameStore>()(persist((set, get) => ({
+export const useGameStore = create<GameStore>()(
+  devtools(
+    persist((set, get) => ({
   // Initial State
   currentScreen: 'welcome',
   playerName: '',
@@ -457,7 +459,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     userId: state.userId,
     playerName: state.playerName,
   }),
-}));
+}), { name: 'WavelengthStore' }));
 
 // Initialize: Check if user exists and skip welcome screen
 if (typeof window !== 'undefined') {
